@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { capturePointer } from "../lib/pointer";
 
 export type TextItem = {
   x: number;
@@ -69,7 +70,7 @@ function TextNodeImpl({
     e.stopPropagation();
     e.preventDefault();
     onSelect(id);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     drag.current = { mode: "move", startX: e.clientX, startY: e.clientY, x: item.x, y: item.y };
   };
 
@@ -79,7 +80,7 @@ function TextNodeImpl({
     e.preventDefault();
     const el = textRef.current;
     if (!el) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     drag.current = {
       mode: "scale",
       startX: e.clientX,

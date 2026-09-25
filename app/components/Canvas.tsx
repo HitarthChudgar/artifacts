@@ -10,7 +10,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { artifacts } from "../lib/artifacts";
+import { capturePointer } from "../lib/pointer";
 import { ArtifactBody, ArtifactCard, HEADER_HEIGHT, type CardLayout } from "./ArtifactCard";
+import { ArrowNode, type ArrowItem } from "./ArrowNode";
 import { DialPanel } from "./DialPanel";
 import { TextNode, type TextItem } from "./TextNode";
 import { clampScale, useCamera, type Camera } from "./useCamera";
@@ -19,9 +21,14 @@ type Saved = {
   camera: Camera;
   layouts: Record<string, CardLayout>;
   texts?: Record<string, TextItem>;
+  arrows?: Record<string, ArrowItem>;
 };
 
+type Tool = "select" | "arrow";
+
 const TEXT_PREFIX = "text:";
+const ARROW_PREFIX = "arrow:";
+const MIN_ARROW_LENGTH = 6;
 const DEFAULT_TEXT_SIZE = 32;
 
 const STORAGE_KEY = "artifact-canvas:v1";
@@ -47,6 +54,9 @@ export default function Canvas() {
   const [stored, setStored] = useState<Record<string, CardLayout>>(initial.layouts);
   const [texts, setTexts] = useState<Record<string, TextItem>>(initial.texts ?? {});
   const [editingText, setEditingText] = useState<string | null>(null);
+  const [arrows, setArrows] = useState<Record<string, ArrowItem>>(initial.arrows ?? {});
+  const [tool, setTool] = useState<Tool>("select");
+  const drawing = useRef<{ id: string; x1: number; y1: number } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
@@ -81,18 +91,21 @@ export default function Canvas() {
 
   const layoutsRef = useRef(layouts);
   const textsRef = useRef(texts);
+  const arrowsRef = useRef(arrows);
   const selectedRef = useRef(selected);
   useLayoutEffect(() => {
     layoutsRef.current = layouts;
     textsRef.current = texts;
+    arrowsRef.current = arrows;
     selectedRef.current = selected;
-  }, [layouts, texts, selected]);
+  }, [layouts, texts, arrows, selected]);
 
   const save = useCallback(() => {
     const data: Saved = {
       camera: savedCamera.current,
       layouts: layoutsRef.current,
       texts: textsRef.current,
+      arrows: arrowsRef.current,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, []);
@@ -100,15 +113,16 @@ export default function Canvas() {
   useEffect(() => {
     const t = setTimeout(save, 250);
     return () => clearTimeout(t);
-  }, [layouts, texts, save]);
+  }, [layouts, texts, arrows, save]);
 
-  // Cards and text share one stacking order.
+  // Cards, text, and arrows share one stacking order.
   const topZ = useCallback(
     () =>
       Math.max(
         0,
         ...Object.values(layoutsRef.current).map((l) => l.z),
         ...Object.values(textsRef.current).map((t) => t.z),
+        ...Object.values(arrowsRef.current).map((a) => a.z),
       ),
     [],
   );
@@ -146,9 +160,26 @@ export default function Canvas() {
       if (text && text.z < top) {
         setTexts((prev) => ({ ...prev, [id]: { ...prev[id], z: top + 1 } }));
       }
+      const arrow = arrowsRef.current[id];
+      if (arrow && arrow.z < top) {
+        setArrows((prev) => ({ ...prev, [id]: { ...prev[id], z: top + 1 } }));
+      }
     },
     [topZ],
   );
+
+  const updateArrow = useCallback((id: string, patch: Partial<ArrowItem>) => {
+    setArrows((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+  }, []);
+
+  const deleteArrow = useCallback((id: string) => {
+    setArrows((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setSelected((s) => (s === id ? null : s));
+  }, []);
 
   const updateText = useCallback((id: string, patch: Partial<TextItem>) => {
     setTexts((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
@@ -267,6 +298,7 @@ export default function Canvas() {
       if (e.key === "Escape") {
         setExpanded(null);
         setSelected(null);
+        setTool("select");
       }
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "0") {
@@ -275,9 +307,13 @@ export default function Canvas() {
       }
       if (e.shiftKey && e.key === "!") fitAll();
       if (!mod && (e.key === "t" || e.key === "T")) addText();
-      if ((e.key === "Backspace" || e.key === "Delete") && selectedRef.current?.startsWith(TEXT_PREFIX)) {
+      if (!mod && (e.key === "a" || e.key === "A")) setTool((t) => (t === "arrow" ? "select" : "arrow"));
+      if (e.key === "Backspace" || e.key === "Delete") {
+        const id = selectedRef.current;
+        if (id?.startsWith(TEXT_PREFIX)) deleteText(id);
+        else if (id?.startsWith(ARROW_PREFIX)) deleteArrow(id);
+        else return;
         e.preventDefault();
-        deleteText(selectedRef.current);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -289,21 +325,54 @@ export default function Canvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [addText, deleteText, fitAll, resetZoom]);
+  }, [addText, deleteArrow, deleteText, fitAll, resetZoom]);
+
+  const toWorld = (clientX: number, clientY: number) => {
+    const rect = viewportRef.current!.getBoundingClientRect();
+    const cam = getCamera();
+    return {
+      x: (clientX - rect.left - cam.x) / cam.scale,
+      y: (clientY - rect.top - cam.y) / cam.scale,
+    };
+  };
 
   const onPointerDownCapture = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (tool === "arrow" && e.button === 0 && !spaceDown.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      capturePointer(e.currentTarget, e.pointerId);
+      const p = toWorld(e.clientX, e.clientY);
+      const id = ARROW_PREFIX + crypto.randomUUID().slice(0, 8);
+      drawing.current = { id, x1: p.x, y1: p.y };
+      setArrows((prev) => ({ ...prev, [id]: { x1: p.x, y1: p.y, x2: p.x, y2: p.y, z: topZ() + 1 } }));
+      setSelected(id);
+      return;
+    }
     const onBackground = e.target === e.currentTarget || (e.target as HTMLElement).dataset.world;
     const wantsPan = e.button === 1 || (e.button === 0 && (spaceDown.current || onBackground));
     if (!wantsPan) return;
     if (onBackground) setSelected(null);
     e.preventDefault();
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     pan.current = { lastX: e.clientX, lastY: e.clientY };
     setPanning(true);
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drawing.current;
+    if (d) {
+      let { x, y } = toWorld(e.clientX, e.clientY);
+      if (e.shiftKey) {
+        // Snap to 45° increments.
+        const len = Math.hypot(x - d.x1, y - d.y1);
+        const angle = Math.round(Math.atan2(y - d.y1, x - d.x1) / (Math.PI / 4)) * (Math.PI / 4);
+        x = d.x1 + Math.cos(angle) * len;
+        y = d.y1 + Math.sin(angle) * len;
+      }
+      updateArrow(d.id, { x2: x, y2: y });
+      return;
+    }
     const p = pan.current;
     if (!p) return;
     panBy(e.clientX - p.lastX, e.clientY - p.lastY);
@@ -312,6 +381,15 @@ export default function Canvas() {
   };
 
   const endPan = () => {
+    const d = drawing.current;
+    if (d) {
+      drawing.current = null;
+      const a = arrowsRef.current[d.id];
+      if (a && Math.hypot(a.x2 - a.x1, a.y2 - a.y1) * getCamera().scale < MIN_ARROW_LENGTH) {
+        deleteArrow(d.id);
+      }
+      setTool("select");
+    }
     pan.current = null;
     setPanning(false);
   };
@@ -326,7 +404,9 @@ export default function Canvas() {
     <div className="fixed inset-0 overflow-hidden bg-[#f4f4f5] text-zinc-900">
       <div
         ref={viewportRef}
-        className={`absolute inset-0 touch-none ${panning ? "cursor-grabbing" : ""}`}
+        className={`absolute inset-0 touch-none ${panning ? "cursor-grabbing" : ""} ${
+          tool === "arrow" ? "cursor-crosshair [&_*]:!cursor-crosshair" : ""
+        }`}
         onPointerDownCapture={onPointerDownCapture}
         onPointerMove={onPointerMove}
         onPointerUp={endPan}
@@ -365,6 +445,17 @@ export default function Canvas() {
               onDelete={deleteText}
             />
           ))}
+          {Object.entries(arrows).map(([id, item]) => (
+            <ArrowNode
+              key={id}
+              id={id}
+              item={item}
+              selected={selected === id}
+              getScale={getScale}
+              onChange={updateArrow}
+              onSelect={select}
+            />
+          ))}
         </div>
 
         {artifacts.length === 0 && (
@@ -381,6 +472,15 @@ export default function Canvas() {
       <div className="absolute right-4 bottom-4 flex items-center gap-0.5 rounded-full bg-[#212121] p-1 text-xs text-zinc-300 shadow-lg ring-1 ring-white/10 select-none">
         <ToolbarButton label="Add text (T)" onClick={() => addText()}>
           <span className="font-serif text-[15px] font-semibold">T</span>
+        </ToolbarButton>
+        <ToolbarButton
+          label="Arrow (A)"
+          active={tool === "arrow"}
+          onClick={() => setTool((t) => (t === "arrow" ? "select" : "arrow"))}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 19 19 5M9 5h10v10" />
+          </svg>
         </ToolbarButton>
         <div className="mx-0.5 h-4 w-px bg-white/10" />
         <ToolbarButton label="Zoom out" onClick={() => zoomStep(1 / BUTTON_ZOOM_STEP)}>
@@ -461,10 +561,12 @@ function canScroll(target: EventTarget | null, dx: number, dy: number, stop: Ele
 
 function ToolbarButton({
   label,
+  active,
   onClick,
   children,
 }: {
   label: string;
+  active?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -472,9 +574,12 @@ function ToolbarButton({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-full text-sm hover:bg-white/10 hover:text-white"
+      className={`flex h-7 w-7 items-center justify-center rounded-full text-sm hover:bg-white/10 hover:text-white ${
+        active ? "bg-white/15 text-white" : ""
+      }`}
     >
       {children}
     </button>

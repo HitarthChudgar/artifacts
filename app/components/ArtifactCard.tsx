@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { Artifact } from "../lib/artifacts";
 import { ArtifactContext } from "../lib/dial";
+import { capturePointer } from "../lib/pointer";
 
 export type CardLayout = {
   x: number;
@@ -60,7 +61,7 @@ function ArtifactCardImpl({
     if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     drag.current = { mode, startX: e.clientX, startY: e.clientY, origin: layout };
   };
 
