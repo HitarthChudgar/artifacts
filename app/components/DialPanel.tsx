@@ -26,7 +26,7 @@ export function DialPanel({ artifactId, title }: { artifactId: string | null; ti
     : NO_PANELS;
 
   return (
-    <div className="dialkit-root" data-mode="popover" data-theme="light">
+    <div className="dialkit-root" data-mode="popover" data-theme="dark">
       <AnimatePresence>
         {visible.length > 0 && (
           <motion.div

@@ -12,9 +12,17 @@ import {
 import { artifacts } from "../lib/artifacts";
 import { ArtifactBody, ArtifactCard, HEADER_HEIGHT, type CardLayout } from "./ArtifactCard";
 import { DialPanel } from "./DialPanel";
+import { TextNode, type TextItem } from "./TextNode";
 import { clampScale, useCamera, type Camera } from "./useCamera";
 
-type Saved = { camera: Camera; layouts: Record<string, CardLayout> };
+type Saved = {
+  camera: Camera;
+  layouts: Record<string, CardLayout>;
+  texts?: Record<string, TextItem>;
+};
+
+const TEXT_PREFIX = "text:";
+const DEFAULT_TEXT_SIZE = 32;
 
 const STORAGE_KEY = "artifact-canvas:v1";
 const GAP = 24;
@@ -37,6 +45,8 @@ const isMouseWheel = (e: WheelEvent) =>
 export default function Canvas() {
   const [initial] = useState(loadSaved);
   const [stored, setStored] = useState<Record<string, CardLayout>>(initial.layouts);
+  const [texts, setTexts] = useState<Record<string, TextItem>>(initial.texts ?? {});
+  const [editingText, setEditingText] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
@@ -70,19 +80,38 @@ export default function Canvas() {
   }, [stored]);
 
   const layoutsRef = useRef(layouts);
+  const textsRef = useRef(texts);
+  const selectedRef = useRef(selected);
   useLayoutEffect(() => {
     layoutsRef.current = layouts;
-  }, [layouts]);
+    textsRef.current = texts;
+    selectedRef.current = selected;
+  }, [layouts, texts, selected]);
 
   const save = useCallback(() => {
-    const data: Saved = { camera: savedCamera.current, layouts: layoutsRef.current };
+    const data: Saved = {
+      camera: savedCamera.current,
+      layouts: layoutsRef.current,
+      texts: textsRef.current,
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, []);
 
   useEffect(() => {
     const t = setTimeout(save, 250);
     return () => clearTimeout(t);
-  }, [layouts, save]);
+  }, [layouts, texts, save]);
+
+  // Cards and text share one stacking order.
+  const topZ = useCallback(
+    () =>
+      Math.max(
+        0,
+        ...Object.values(layoutsRef.current).map((l) => l.z),
+        ...Object.values(textsRef.current).map((t) => t.z),
+      ),
+    [],
+  );
 
   const camera = useCamera({
     initial: initial.camera,
@@ -105,14 +134,60 @@ export default function Canvas() {
     setStored((prev) => ({ ...prev, [id]: { ...layoutsRef.current[id], ...prev[id], ...patch } }));
   }, []);
 
-  const select = useCallback((id: string) => {
-    setSelected(id);
-    const all = layoutsRef.current;
-    const topZ = Math.max(...Object.values(all).map((l) => l.z));
-    if (all[id] && all[id].z < topZ) {
-      setStored((prev) => ({ ...prev, [id]: { ...all[id], ...prev[id], z: topZ + 1 } }));
-    }
+  const select = useCallback(
+    (id: string) => {
+      setSelected(id);
+      const top = topZ();
+      const card = layoutsRef.current[id];
+      const text = textsRef.current[id];
+      if (card && card.z < top) {
+        setStored((prev) => ({ ...prev, [id]: { ...card, ...prev[id], z: top + 1 } }));
+      }
+      if (text && text.z < top) {
+        setTexts((prev) => ({ ...prev, [id]: { ...prev[id], z: top + 1 } }));
+      }
+    },
+    [topZ],
+  );
+
+  const updateText = useCallback((id: string, patch: Partial<TextItem>) => {
+    setTexts((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
   }, []);
+
+  const deleteText = useCallback((id: string) => {
+    setTexts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setSelected((s) => (s === id ? null : s));
+  }, []);
+
+  /** Add a text node at a screen point (defaults to the viewport center) and start editing it. */
+  const addText = useCallback(
+    (sx?: number, sy?: number) => {
+      const el = viewportRef.current;
+      if (!el) return;
+      const cam = getCamera();
+      const px = sx ?? el.clientWidth / 2;
+      const py = sy ?? el.clientHeight / 2;
+      const size = Math.round(DEFAULT_TEXT_SIZE / cam.scale);
+      const id = TEXT_PREFIX + crypto.randomUUID().slice(0, 8);
+      setTexts((prev) => ({
+        ...prev,
+        [id]: {
+          x: (px - cam.x) / cam.scale,
+          y: (py - cam.y) / cam.scale - size * 0.6,
+          z: topZ() + 1,
+          text: "Text",
+          size,
+        },
+      }));
+      setSelected(id);
+      setEditingText(id);
+    },
+    [getCamera, topZ],
+  );
 
   const center = useCallback(() => {
     const el = viewportRef.current;
@@ -199,6 +274,11 @@ export default function Canvas() {
         resetZoom();
       }
       if (e.shiftKey && e.key === "!") fitAll();
+      if (!mod && (e.key === "t" || e.key === "T")) addText();
+      if ((e.key === "Backspace" || e.key === "Delete") && selectedRef.current?.startsWith(TEXT_PREFIX)) {
+        e.preventDefault();
+        deleteText(selectedRef.current);
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") spaceDown.current = false;
@@ -209,7 +289,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [fitAll, resetZoom]);
+  }, [addText, deleteText, fitAll, resetZoom]);
 
   const onPointerDownCapture = (e: ReactPointerEvent<HTMLDivElement>) => {
     const onBackground = e.target === e.currentTarget || (e.target as HTMLElement).dataset.world;
@@ -251,6 +331,12 @@ export default function Canvas() {
         onPointerMove={onPointerMove}
         onPointerUp={endPan}
         onPointerCancel={endPan}
+        onDoubleClick={(e) => {
+          const onBackground = e.target === e.currentTarget || (e.target as HTMLElement).dataset.world;
+          if (!onBackground) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          addText(e.clientX - rect.left, e.clientY - rect.top);
+        }}
       >
         <div ref={worldRef} data-world className="absolute top-0 left-0 origin-top-left">
           {artifacts.map((a) => (
@@ -263,6 +349,20 @@ export default function Canvas() {
               onChange={updateLayout}
               onSelect={select}
               onExpand={setExpanded}
+            />
+          ))}
+          {Object.entries(texts).map(([id, item]) => (
+            <TextNode
+              key={id}
+              id={id}
+              item={item}
+              selected={selected === id}
+              editing={editingText === id}
+              getScale={getScale}
+              onChange={updateText}
+              onSelect={select}
+              onEdit={setEditingText}
+              onDelete={deleteText}
             />
           ))}
         </div>
@@ -278,7 +378,11 @@ export default function Canvas() {
         )}
       </div>
 
-      <div className="absolute right-4 bottom-4 flex items-center gap-0.5 rounded-full bg-white p-1 text-xs text-zinc-600 shadow-sm ring-1 ring-black/5 select-none">
+      <div className="absolute right-4 bottom-4 flex items-center gap-0.5 rounded-full bg-[#212121] p-1 text-xs text-zinc-300 shadow-lg ring-1 ring-white/10 select-none">
+        <ToolbarButton label="Add text (T)" onClick={() => addText()}>
+          <span className="font-serif text-[15px] font-semibold">T</span>
+        </ToolbarButton>
+        <div className="mx-0.5 h-4 w-px bg-white/10" />
         <ToolbarButton label="Zoom out" onClick={() => zoomStep(1 / BUTTON_ZOOM_STEP)}>
           −
         </ToolbarButton>
@@ -286,19 +390,19 @@ export default function Canvas() {
           type="button"
           title="Reset zoom (⌘0)"
           onClick={resetZoom}
-          className="h-7 w-12 rounded-full font-mono tabular-nums hover:bg-black/5"
+          className="h-7 w-12 rounded-full font-mono tabular-nums hover:bg-white/10 hover:text-white"
         >
           <span ref={zoomLabelRef} />
         </button>
         <ToolbarButton label="Zoom in" onClick={() => zoomStep(BUTTON_ZOOM_STEP)}>
           +
         </ToolbarButton>
-        <div className="mx-0.5 h-4 w-px bg-black/10" />
+        <div className="mx-0.5 h-4 w-px bg-white/10" />
         <button
           type="button"
           title="Fit all (⇧1)"
           onClick={fitAll}
-          className="h-7 rounded-full px-2.5 hover:bg-black/5"
+          className="h-7 rounded-full px-2.5 hover:bg-white/10 hover:text-white"
         >
           Fit
         </button>
@@ -370,7 +474,7 @@ function ToolbarButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-full text-sm hover:bg-black/5"
+      className="flex h-7 w-7 items-center justify-center rounded-full text-sm hover:bg-white/10 hover:text-white"
     >
       {children}
     </button>

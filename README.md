@@ -76,8 +76,12 @@ export default function Card() {
 | Rename                  | Double-click the title or click the pencil icon (Enter saves, Esc cancels) |
 | Expand                  | Click the expand icon · Esc closes                           |
 | Deselect                | Click empty space or press Esc                               |
+| Add text                | Double-click empty space, press T, or use the T button       |
+| Edit text               | Double-click it · Esc or ⌘Enter finishes (empty text is removed) |
+| Move / scale text       | Drag it to move · drag its corner handle to scale up or down |
+| Delete text             | Select it and press Delete/Backspace                         |
 
-Card positions, sizes, names, and the camera are saved in `localStorage`.
+Card positions, sizes, names, text notes, and the camera are saved in `localStorage`.
 
 ## Project structure
 
@@ -90,6 +94,7 @@ app/
     Canvas.tsx             viewport, selection, toolbar, expanded view
     ArtifactCard.tsx       card chrome: drag, resize, rename, error boundary
     DialPanel.tsx          DialKit panel for the selected artifact
+    TextNode.tsx           text notes: edit, move, drag-to-scale
     useCamera.ts           smooth pan/zoom camera
   lib/
     artifacts.ts           turns registry modules into artifact entries
