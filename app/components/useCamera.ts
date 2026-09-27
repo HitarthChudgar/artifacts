@@ -51,6 +51,7 @@ export function useCamera({
     if (world) {
       world.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
       world.style.willChange = "transform";
+      world.style.setProperty("--inv-scale", String(1 / scale));
     }
     if (viewport) {
       const dot = DOT_SPACING * scale;

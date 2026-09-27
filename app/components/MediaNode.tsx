@@ -18,8 +18,18 @@ type Props = {
   onSelect: (id: string) => void;
 };
 
+type Corner = { sx: 1 | -1; sy: 1 | -1 };
+
+const CORNERS: (Corner & { className: string })[] = [
+  { sx: -1, sy: -1, className: "-top-1.5 -left-1.5 cursor-nwse-resize" },
+  { sx: 1, sy: -1, className: "-top-1.5 -right-1.5 cursor-nesw-resize" },
+  { sx: -1, sy: 1, className: "-bottom-1.5 -left-1.5 cursor-nesw-resize" },
+  { sx: 1, sy: 1, className: "-right-1.5 -bottom-1.5 cursor-nwse-resize" },
+];
+
 type Drag = {
   mode: "move" | "resize";
+  corner: Corner;
   startX: number;
   startY: number;
   origin: MediaItem;
@@ -28,14 +38,14 @@ type Drag = {
 function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Props) {
   const drag = useRef<Drag | null>(null);
 
-  const startDrag = (e: ReactPointerEvent<HTMLElement>, mode: Drag["mode"]) => {
+  const startDrag = (e: ReactPointerEvent<HTMLElement>, mode: Drag["mode"], corner: Corner = { sx: 1, sy: 1 }) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button, a")) return;
     e.preventDefault();
     e.stopPropagation();
     onSelect(id);
     capturePointer(e.currentTarget, e.pointerId);
-    drag.current = { mode, startX: e.clientX, startY: e.clientY, origin: item };
+    drag.current = { mode, corner, startX: e.clientX, startY: e.clientY, origin: item };
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
@@ -47,10 +57,14 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
     const o = d.origin;
     if (d.mode === "move") {
       onChange(id, { x: o.x + dx, y: o.y + dy });
-    } else if (o.kind === "image" && !e.shiftKey) {
-      // Images keep their aspect ratio unless Shift is held.
-      const w = Math.max(MIN_SIZE, o.w + Math.max(dx, (dy * o.w) / o.h));
-      onChange(id, { w, h: (w * o.h) / o.w });
+    } else if (o.kind === "image") {
+      // Grow by whichever axis moved further, then derive the other from the aspect ratio,
+      // keeping the opposite corner fixed.
+      const { sx, sy } = d.corner;
+      const ratio = o.w / o.h;
+      const w = Math.max(MIN_SIZE, o.w + Math.max(sx * dx, sy * dy * ratio));
+      const h = w / ratio;
+      onChange(id, { w, h, x: sx < 0 ? o.x + o.w - w : o.x, y: sy < 0 ? o.y + o.h - h : o.y });
     } else {
       onChange(id, { w: Math.max(MIN_SIZE * 3, o.w + dx), h: Math.max(MIN_SIZE * 2, o.h + dy) });
     }
@@ -93,7 +107,18 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
             Uploading…
           </div>
         )}
-        {resizeHandle}
+        {selected &&
+          CORNERS.map(({ className, ...corner }) => (
+            <div
+              key={className}
+              title="Drag to resize"
+              className={`absolute z-10 h-3 w-3 scale-(--inv-scale) rounded-full border-2 border-blue-500 bg-white ${className}`}
+              onPointerDown={(e) => startDrag(e, "resize", corner)}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            />
+          ))}
       </div>
     );
   }

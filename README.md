@@ -84,7 +84,8 @@ export default function Card() {
 | Edit an arrow           | Drag it to move · drag an end handle to reposition · Delete/Backspace removes |
 | Place an image          | Paste or drop a PNG, GIF, JPEG, or WebP (or paste an image URL) |
 | Place a link            | Paste or drop a URL — the page is shown in an iframe          |
-| Edit an image / link    | Drag to move · drag the corner to resize (Shift frees an image's aspect ratio) · Delete/Backspace removes |
+| Edit an image           | Drag to move · select it and drag any corner handle to resize (keeps aspect ratio) · Delete/Backspace removes |
+| Edit a link             | Drag its header to move · drag the bottom-right corner to resize · Delete/Backspace removes |
 | Interact with a link    | Select it first — the page only receives clicks while selected |
 
 Card positions, sizes, names, text notes, arrows, images, links, and the camera are saved in `localStorage`. Pasted and dropped image files are uploaded to `uploads/` (gitignored) and served from `/api/uploads`.

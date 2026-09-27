@@ -636,7 +636,11 @@ export default function Canvas() {
         )}
       </div>
 
-      <div className="absolute right-4 bottom-4 flex items-center gap-0.5 rounded-full bg-[#212121] p-1 text-xs text-zinc-300 shadow-lg ring-1 ring-white/10 select-none">
+      <div
+        className="absolute right-4 bottom-4 flex items-center gap-0.5 rounded-full bg-[#212121] p-1 text-xs text-zinc-300 shadow-lg ring-1 ring-white/10 select-none"
+        // Clicked buttons must not keep focus, or Space (pan) / Enter would re-trigger them.
+        onMouseDown={(e) => e.preventDefault()}
+      >
         <ToolbarButton label="Add text (T)" onClick={() => addText()}>
           <span className="font-serif text-[15px] font-semibold">T</span>
         </ToolbarButton>
