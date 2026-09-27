@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GridReveal } from "@/app/components/ui/grid-reveal";
+import { GridReveal } from "@/app/components/grid-reveal";
 import { useArtifactDial } from "@/app/lib/dial";
 
 export const meta = { title: "grid-reveal", width: 360, height: 440 };
 
 const MAX_HEIGHT = 312;
-const ASPECTS: Record<string, number> = { "1:1": 1, "4:3": 4 / 3, "3:4": 3 / 4, "16:9": 16 / 9 };
+const ASPECTS: Record<string, number> = {
+  "1:1": 1,
+  "4:3": 4 / 3,
+  "3:4": 3 / 4,
+  "16:9": 16 / 9,
+};
 
 /** A fake image generation: the picture "arrives" after `delay` seconds. */
 export default function GridRevealExample() {
@@ -33,8 +38,14 @@ export default function GridRevealExample() {
   }, [run, delayMs]);
 
   const aspect = ASPECTS[dial.aspect] ?? 1;
-  const size = aspect >= 1 ? { w: 1200, h: Math.round(1200 / aspect) } : { w: Math.round(1200 * aspect), h: 1200 };
-  const src = arrived === run ? `https://picsum.photos/seed/artifact-${run}/${size.w}/${size.h}` : null;
+  const size =
+    aspect >= 1
+      ? { w: 1200, h: Math.round(1200 / aspect) }
+      : { w: Math.round(1200 * aspect), h: 1200 };
+  const src =
+    arrived === run
+      ? `https://picsum.photos/seed/artifact-${run}/${size.w}/${size.h}`
+      : null;
 
   return (
     <div
