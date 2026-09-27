@@ -12,8 +12,17 @@ import {
 import { artifacts } from "../lib/artifacts";
 import { capturePointer } from "../lib/pointer";
 import { ArtifactBody, ArtifactCard, HEADER_HEIGHT, type CardLayout } from "./ArtifactCard";
+import {
+  fetchPreview,
+  isImageUrl,
+  loadImageSize,
+  parseUrl,
+  uploadImage,
+  type MediaItem,
+} from "../lib/media";
 import { ArrowNode, type ArrowItem } from "./ArrowNode";
 import { DialPanel } from "./DialPanel";
+import { MediaNode } from "./MediaNode";
 import { TextNode, type TextItem } from "./TextNode";
 import { clampScale, useCamera, type Camera } from "./useCamera";
 
@@ -22,12 +31,17 @@ type Saved = {
   layouts: Record<string, CardLayout>;
   texts?: Record<string, TextItem>;
   arrows?: Record<string, ArrowItem>;
+  media?: Record<string, MediaItem>;
 };
 
 type Tool = "select" | "arrow";
 
 const TEXT_PREFIX = "text:";
 const ARROW_PREFIX = "arrow:";
+const MEDIA_PREFIX = "media:";
+// On-screen size new images/links are placed at, independent of zoom.
+const MAX_IMAGE_SCREEN = 480;
+const LINK_SCREEN = { w: 640, h: 420 };
 const MIN_ARROW_LENGTH = 6;
 const DEFAULT_TEXT_SIZE = 32;
 
@@ -55,7 +69,14 @@ export default function Canvas() {
   const [texts, setTexts] = useState<Record<string, TextItem>>(initial.texts ?? {});
   const [editingText, setEditingText] = useState<string | null>(null);
   const [arrows, setArrows] = useState<Record<string, ArrowItem>>(initial.arrows ?? {});
+  const [media, setMedia] = useState<Record<string, MediaItem>>(() =>
+    // Blob URLs from an unfinished upload don't survive a reload.
+    Object.fromEntries(
+      Object.entries(initial.media ?? {}).filter(([, m]) => !(m.kind === "image" && m.src.startsWith("blob:"))),
+    ),
+  );
   const [tool, setTool] = useState<Tool>("select");
+  const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const drawing = useRef<{ id: string; x1: number; y1: number } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -92,13 +113,15 @@ export default function Canvas() {
   const layoutsRef = useRef(layouts);
   const textsRef = useRef(texts);
   const arrowsRef = useRef(arrows);
+  const mediaRef = useRef(media);
   const selectedRef = useRef(selected);
   useLayoutEffect(() => {
     layoutsRef.current = layouts;
     textsRef.current = texts;
     arrowsRef.current = arrows;
+    mediaRef.current = media;
     selectedRef.current = selected;
-  }, [layouts, texts, arrows, selected]);
+  }, [layouts, texts, arrows, media, selected]);
 
   const save = useCallback(() => {
     const data: Saved = {
@@ -106,6 +129,7 @@ export default function Canvas() {
       layouts: layoutsRef.current,
       texts: textsRef.current,
       arrows: arrowsRef.current,
+      media: mediaRef.current,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, []);
@@ -113,9 +137,9 @@ export default function Canvas() {
   useEffect(() => {
     const t = setTimeout(save, 250);
     return () => clearTimeout(t);
-  }, [layouts, texts, arrows, save]);
+  }, [layouts, texts, arrows, media, save]);
 
-  // Cards, text, and arrows share one stacking order.
+  // Everything on the canvas shares one stacking order.
   const topZ = useCallback(
     () =>
       Math.max(
@@ -123,6 +147,7 @@ export default function Canvas() {
         ...Object.values(layoutsRef.current).map((l) => l.z),
         ...Object.values(textsRef.current).map((t) => t.z),
         ...Object.values(arrowsRef.current).map((a) => a.z),
+        ...Object.values(mediaRef.current).map((m) => m.z),
       ),
     [],
   );
@@ -164,9 +189,124 @@ export default function Canvas() {
       if (arrow && arrow.z < top) {
         setArrows((prev) => ({ ...prev, [id]: { ...prev[id], z: top + 1 } }));
       }
+      const m = mediaRef.current[id];
+      if (m && m.z < top) {
+        setMedia((prev) => ({ ...prev, [id]: { ...prev[id], z: top + 1 } }));
+      }
     },
     [topZ],
   );
+
+  const updateMedia = useCallback((id: string, patch: Partial<MediaItem>) => {
+    setMedia((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } as MediaItem } : prev));
+  }, []);
+
+  const deleteMedia = useCallback((id: string) => {
+    setMedia((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setSelected((s) => (s === id ? null : s));
+  }, []);
+
+  /** World position for new content: the last pointer position over the canvas, or its center. */
+  const dropPoint = useCallback(
+    (screen?: { x: number; y: number }) => {
+      const el = viewportRef.current;
+      const cam = getCamera();
+      const p = screen ?? lastPointer.current ?? {
+        x: (el?.clientWidth ?? 0) / 2,
+        y: (el?.clientHeight ?? 0) / 2,
+      };
+      return { x: (p.x - cam.x) / cam.scale, y: (p.y - cam.y) / cam.scale, scale: cam.scale };
+    },
+    [getCamera],
+  );
+
+  const placeImage = useCallback(
+    async (src: string, at: { x: number; y: number; scale: number }, file?: File) => {
+      const { width, height } = await loadImageSize(src);
+      const fit = Math.min(1, MAX_IMAGE_SCREEN / Math.max(width, height));
+      const w = (width * fit) / at.scale;
+      const h = (height * fit) / at.scale;
+      const id = MEDIA_PREFIX + crypto.randomUUID().slice(0, 8);
+      setMedia((prev) => ({
+        ...prev,
+        [id]: {
+          kind: "image",
+          src,
+          name: file?.name,
+          uploading: !!file,
+          x: at.x - w / 2,
+          y: at.y - h / 2,
+          w,
+          h,
+          z: topZ() + 1,
+        },
+      }));
+      setSelected(id);
+      if (!file) return;
+      try {
+        const url = await uploadImage(file);
+        updateMedia(id, { src: url, uploading: false });
+      } catch (err) {
+        console.error(err);
+        deleteMedia(id);
+        window.alert(`Couldn't add ${file.name}: ${(err as Error).message}`);
+      } finally {
+        URL.revokeObjectURL(src);
+      }
+    },
+    [deleteMedia, topZ, updateMedia],
+  );
+
+  const placeLink = useCallback(
+    async (url: string, at: { x: number; y: number; scale: number }) => {
+      const w = LINK_SCREEN.w / at.scale;
+      const h = LINK_SCREEN.h / at.scale;
+      const id = MEDIA_PREFIX + crypto.randomUUID().slice(0, 8);
+      setMedia((prev) => ({
+        ...prev,
+        [id]: { kind: "link", url, x: at.x - w / 2, y: at.y - h / 2, w, h, z: topZ() + 1 },
+      }));
+      setSelected(id);
+      updateMedia(id, { preview: await fetchPreview(url) });
+    },
+    [topZ, updateMedia],
+  );
+
+  /** Place pasted/dropped files and URLs, fanning multiple items out so they don't stack. */
+  const placeContent = useCallback(
+    (files: File[], text: string, screen?: { x: number; y: number }) => {
+      const at = dropPoint(screen);
+      const images = files.filter((f) => f.type.startsWith("image/"));
+      images.forEach((file, i) => {
+        const offset = (i * 32) / at.scale;
+        placeImage(URL.createObjectURL(file), { ...at, x: at.x + offset, y: at.y + offset }, file);
+      });
+      if (images.length) return true;
+
+      const url = parseUrl(text);
+      if (!url) return false;
+      if (isImageUrl(url)) placeImage(url.href, at);
+      else placeLink(url.href, at);
+      return true;
+    },
+    [dropPoint, placeImage, placeLink],
+  );
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const data = e.clipboardData;
+      if (!data) return;
+      if (placeContent([...data.files], data.getData("text/plain"))) e.preventDefault();
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [placeContent]);
 
   const updateArrow = useCallback((id: string, patch: Partial<ArrowItem>) => {
     setArrows((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
@@ -312,6 +452,7 @@ export default function Canvas() {
         const id = selectedRef.current;
         if (id?.startsWith(TEXT_PREFIX)) deleteText(id);
         else if (id?.startsWith(ARROW_PREFIX)) deleteArrow(id);
+        else if (id?.startsWith(MEDIA_PREFIX)) deleteMedia(id);
         else return;
         e.preventDefault();
       }
@@ -325,7 +466,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [addText, deleteArrow, deleteText, fitAll, resetZoom]);
+  }, [addText, deleteArrow, deleteMedia, deleteText, fitAll, resetZoom]);
 
   const toWorld = (clientX: number, clientY: number) => {
     const rect = viewportRef.current!.getBoundingClientRect();
@@ -360,6 +501,8 @@ export default function Canvas() {
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    lastPointer.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const d = drawing.current;
     if (d) {
       let { x, y } = toWorld(e.clientX, e.clientY);
@@ -417,6 +560,19 @@ export default function Canvas() {
           const rect = e.currentTarget.getBoundingClientRect();
           addText(e.clientX - rect.left, e.clientY - rect.top);
         }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const rect = e.currentTarget.getBoundingClientRect();
+          placeContent(
+            [...e.dataTransfer.files],
+            e.dataTransfer.getData("text/uri-list").split("\n")[0] || e.dataTransfer.getData("text/plain"),
+            { x: e.clientX - rect.left, y: e.clientY - rect.top },
+          );
+        }}
       >
         <div ref={worldRef} data-world className="absolute top-0 left-0 origin-top-left">
           {artifacts.map((a) => (
@@ -443,6 +599,17 @@ export default function Canvas() {
               onSelect={select}
               onEdit={setEditingText}
               onDelete={deleteText}
+            />
+          ))}
+          {Object.entries(media).map(([id, item]) => (
+            <MediaNode
+              key={id}
+              id={id}
+              item={item}
+              selected={selected === id}
+              getScale={getScale}
+              onChange={updateMedia}
+              onSelect={select}
             />
           ))}
           {Object.entries(arrows).map(([id, item]) => (

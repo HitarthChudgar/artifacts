@@ -42,3 +42,6 @@ next-env.d.ts
 
 # pnpm store (created when installing inside a sandbox)
 .pnpm-store
+
+# images placed on the canvas
+uploads/

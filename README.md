@@ -82,8 +82,12 @@ export default function Card() {
 | Delete text             | Select it and press Delete/Backspace                         |
 | Draw an arrow           | Press A or use the arrow button, then drag (hold Shift to snap to 45°) |
 | Edit an arrow           | Drag it to move · drag an end handle to reposition · Delete/Backspace removes |
+| Place an image          | Paste or drop a PNG, GIF, JPEG, or WebP (or paste an image URL) |
+| Place a link            | Paste or drop a URL — the page is shown in an iframe          |
+| Edit an image / link    | Drag to move · drag the corner to resize (Shift frees an image's aspect ratio) · Delete/Backspace removes |
+| Interact with a link    | Select it first — the page only receives clicks while selected |
 
-Card positions, sizes, names, text notes, arrows, and the camera are saved in `localStorage`.
+Card positions, sizes, names, text notes, arrows, images, links, and the camera are saved in `localStorage`. Pasted and dropped image files are uploaded to `uploads/` (gitignored) and served from `/api/uploads`.
 
 ## Project structure
 
@@ -98,10 +102,17 @@ app/
     DialPanel.tsx          DialKit panel for the selected artifact
     TextNode.tsx           text notes: edit, move, drag-to-scale
     ArrowNode.tsx          arrows: move, drag endpoints
+    MediaNode.tsx          images and website iframes: move, resize
     useCamera.ts           smooth pan/zoom camera
+  api/
+    uploads/               POST saves an image to uploads/, GET serves it
+    preview/               fetches a URL's title/favicon and whether it can be iframed
+    frame/                 proxies pages that block iframes (sandboxed, links open in a new tab)
   lib/
     artifacts.ts           turns registry modules into artifact entries
     dial.ts                useArtifactDial + toMotion
+    media.ts               media types, URL parsing, upload/preview clients
+uploads/                   uploaded images (gitignored)
 ```
 
 Artifact discovery uses Turbopack's `import.meta.glob`, so the dev server must run with Turbopack (the default for `next dev`).
