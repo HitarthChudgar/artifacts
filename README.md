@@ -117,3 +117,13 @@ uploads/                   uploaded images (gitignored)
 ```
 
 Artifact discovery uses Turbopack's `import.meta.glob`, so the dev server must run with Turbopack (the default for `next dev`).
+
+## License
+
+Copyright 2026 Hitarth Chudgar. Licensed under the [Apache License, Version 2.0](LICENSE).
+
+Artifacts is a personal project, built independently on personal time. Companies that use this code — including the author's employer — do so as licensees under Apache 2.0; they are users of the source, not its creators or owners. See [NOTICE](NOTICE).
+
+### Third-party
+
+- `app/components/grid-reveal.tsx` is [Grid Reveal](https://rareui.com) from [Rare UI](https://rareui.com) by Swami Malode, used under its own [MIT + Commons Clause + Attribution license](https://github.com/swamimalode07/rare-ui/blob/main/LICENSE). It is not covered by Apache 2.0 and may not be sold or redistributed as a standalone component.

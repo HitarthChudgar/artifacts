@@ -1,0 +1,28 @@
+Artifacts
+Copyright 2026 Hitarth Chudgar
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Authorship and ownership
+------------------------
+Artifacts is a personal project. It was conceived, written, and is maintained
+by Hitarth Chudgar independently, on personal time and with personal
+equipment and resources. It is not a work made for hire, and no employer,
+client, or company is its author or owner.
+
+Any company or organization that uses this source code, including any current
+or former employer of the author, does so solely as a licensee under the
+Apache License, Version 2.0, on the same terms as any other user. Such use
+does not transfer or imply any ownership of, or authorship over, this project.
+
+Third-party components
+----------------------
+app/components/grid-reveal.tsx
+  Grid Reveal, from Rare UI (https://rareui.com)
+  Copyright (c) 2026 Swami Malode
+  Licensed under MIT + Commons Clause License Condition v1.0 + Attribution:
+  https://github.com/swamimalode07/rare-ui/blob/main/LICENSE
+  This file is NOT covered by the Apache License. It may be used as part of
+  an application, but the component itself may not be sold, sublicensed, or
+  redistributed on its own, and any project shipping it must credit Rare UI
+  with a visible link to https://rareui.com.

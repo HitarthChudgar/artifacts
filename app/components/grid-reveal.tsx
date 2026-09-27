@@ -1,3 +1,12 @@
+/**
+ * Grid Reveal — from Rare UI (https://rareui.com)
+ * Copyright (c) 2026 Swami Malode
+ *
+ * Licensed under MIT + Commons Clause License Condition v1.0 + Attribution,
+ * not the Apache License that covers the rest of this project:
+ * https://github.com/swamimalode07/rare-ui/blob/main/LICENSE
+ * This notice must not be removed.
+ */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
