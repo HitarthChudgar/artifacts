@@ -7,4 +7,5 @@ export const IMAGE_TYPES: Record<string, string> = {
   "image/gif": "gif",
   "image/jpeg": "jpg",
   "image/webp": "webp",
+  "image/svg+xml": "svg",
 };

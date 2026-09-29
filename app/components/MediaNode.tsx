@@ -96,12 +96,21 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
-        <img
-          src={item.src}
-          alt={item.name ?? ""}
-          draggable={false}
-          className="pointer-events-none h-full w-full object-fill select-none"
-        />
+        {item.svg ? (
+          <object
+            data={item.src}
+            type="image/svg+xml"
+            aria-label={item.name ?? ""}
+            className="pointer-events-none h-full w-full"
+          />
+        ) : (
+          <img
+            src={item.src}
+            alt={item.name ?? ""}
+            draggable={false}
+            className="pointer-events-none h-full w-full object-fill select-none"
+          />
+        )}
         {item.uploading && (
           <div className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
             Uploading…

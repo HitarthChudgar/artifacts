@@ -84,7 +84,7 @@ export default function Card() {
 | Delete text             | Select it and press Delete/Backspace                         |
 | Draw an arrow           | Press A or use the arrow button, then drag (hold Shift to snap to 45°) |
 | Edit an arrow           | Drag it to move · drag an end handle to reposition · Delete/Backspace removes |
-| Place an image          | Paste or drop a PNG, GIF, JPEG, or WebP (or paste an image URL) |
+| Place an image          | Paste or drop a PNG, GIF, JPEG, WebP, or SVG — including animated SVG markup or a file |
 | Place a link            | Paste or drop a URL — the page is shown in an iframe          |
 | Edit an image           | Drag to move · select it and drag any corner handle to resize (keeps aspect ratio) · Delete/Backspace removes |
 | Edit a link             | Drag its header to move · drag the bottom-right corner to resize · Delete/Backspace removes |

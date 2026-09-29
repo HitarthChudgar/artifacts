@@ -11,12 +11,20 @@ import {
 } from "react";
 import { artifacts } from "../lib/artifacts";
 import { capturePointer } from "../lib/pointer";
-import { ArtifactBody, ArtifactCard, HEADER_HEIGHT, type CardLayout } from "./ArtifactCard";
+import {
+  ArtifactBody,
+  ArtifactCard,
+  HEADER_HEIGHT,
+  type CardLayout,
+} from "./ArtifactCard";
 import {
   fetchPreview,
   isImageUrl,
+  isSvgFile,
+  isSvgSrc,
   loadImageSize,
   parseUrl,
+  svgFileFromClipboard,
   uploadImage,
   type MediaItem,
 } from "../lib/media";
@@ -62,18 +70,27 @@ function loadSaved(): Saved {
 
 // Trackpads send many small pixel deltas; mouse wheels send few large (or line-based) ones.
 const isMouseWheel = (e: WheelEvent) =>
-  e.deltaMode !== 0 || (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50);
+  e.deltaMode !== 0 ||
+  (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50);
 
 export default function Canvas() {
   const [initial] = useState(loadSaved);
-  const [stored, setStored] = useState<Record<string, CardLayout>>(initial.layouts);
-  const [texts, setTexts] = useState<Record<string, TextItem>>(initial.texts ?? {});
+  const [stored, setStored] = useState<Record<string, CardLayout>>(
+    initial.layouts,
+  );
+  const [texts, setTexts] = useState<Record<string, TextItem>>(
+    initial.texts ?? {},
+  );
   const [editingText, setEditingText] = useState<string | null>(null);
-  const [arrows, setArrows] = useState<Record<string, ArrowItem>>(initial.arrows ?? {});
+  const [arrows, setArrows] = useState<Record<string, ArrowItem>>(
+    initial.arrows ?? {},
+  );
   const [media, setMedia] = useState<Record<string, MediaItem>>(() =>
     // Blob URLs from an unfinished upload don't survive a reload.
     Object.fromEntries(
-      Object.entries(initial.media ?? {}).filter(([, m]) => !(m.kind === "image" && m.src.startsWith("blob:"))),
+      Object.entries(initial.media ?? {}).filter(
+        ([, m]) => !(m.kind === "image" && m.src.startsWith("blob:")),
+      ),
     ),
   );
   const [tool, setTool] = useState<Tool>("select");
@@ -172,7 +189,10 @@ export default function Canvas() {
   const getScale = useCallback(() => getCamera().scale, [getCamera]);
 
   const updateLayout = useCallback((id: string, patch: Partial<CardLayout>) => {
-    setStored((prev) => ({ ...prev, [id]: { ...layoutsRef.current[id], ...prev[id], ...patch } }));
+    setStored((prev) => ({
+      ...prev,
+      [id]: { ...layoutsRef.current[id], ...prev[id], ...patch },
+    }));
   }, []);
 
   const select = useCallback(
@@ -182,7 +202,10 @@ export default function Canvas() {
       const card = layoutsRef.current[id];
       const text = textsRef.current[id];
       if (card && card.z < top) {
-        setStored((prev) => ({ ...prev, [id]: { ...card, ...prev[id], z: top + 1 } }));
+        setStored((prev) => ({
+          ...prev,
+          [id]: { ...card, ...prev[id], z: top + 1 },
+        }));
       }
       if (text && text.z < top) {
         setTexts((prev) => ({ ...prev, [id]: { ...prev[id], z: top + 1 } }));
@@ -200,7 +223,11 @@ export default function Canvas() {
   );
 
   const updateMedia = useCallback((id: string, patch: Partial<MediaItem>) => {
-    setMedia((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } as MediaItem } : prev));
+    setMedia((prev) =>
+      prev[id]
+        ? { ...prev, [id]: { ...prev[id], ...patch } as MediaItem }
+        : prev,
+    );
   }, []);
 
   const deleteMedia = useCallback((id: string) => {
@@ -217,17 +244,26 @@ export default function Canvas() {
     (screen?: { x: number; y: number }) => {
       const el = viewportRef.current;
       const cam = getCamera();
-      const p = screen ?? lastPointer.current ?? {
-        x: (el?.clientWidth ?? 0) / 2,
-        y: (el?.clientHeight ?? 0) / 2,
+      const p = screen ??
+        lastPointer.current ?? {
+          x: (el?.clientWidth ?? 0) / 2,
+          y: (el?.clientHeight ?? 0) / 2,
+        };
+      return {
+        x: (p.x - cam.x) / cam.scale,
+        y: (p.y - cam.y) / cam.scale,
+        scale: cam.scale,
       };
-      return { x: (p.x - cam.x) / cam.scale, y: (p.y - cam.y) / cam.scale, scale: cam.scale };
     },
     [getCamera],
   );
 
   const placeImage = useCallback(
-    async (src: string, at: { x: number; y: number; scale: number }, file?: File) => {
+    async (
+      src: string,
+      at: { x: number; y: number; scale: number },
+      file?: File,
+    ) => {
       const { width, height } = await loadImageSize(src);
       const fit = Math.min(1, MAX_IMAGE_SCREEN / Math.max(width, height));
       const w = (width * fit) / at.scale;
@@ -240,6 +276,7 @@ export default function Canvas() {
           src,
           name: file?.name,
           uploading: !!file,
+          svg: file ? isSvgFile(file) : isSvgSrc(src),
           x: at.x - w / 2,
           y: at.y - h / 2,
           w,
@@ -270,7 +307,15 @@ export default function Canvas() {
       const id = MEDIA_PREFIX + crypto.randomUUID().slice(0, 8);
       setMedia((prev) => ({
         ...prev,
-        [id]: { kind: "link", url, x: at.x - w / 2, y: at.y - h / 2, w, h, z: topZ() + 1 },
+        [id]: {
+          kind: "link",
+          url,
+          x: at.x - w / 2,
+          y: at.y - h / 2,
+          w,
+          h,
+          z: topZ() + 1,
+        },
       }));
       setSelected(id);
       updateMedia(id, { preview: await fetchPreview(url) });
@@ -282,10 +327,16 @@ export default function Canvas() {
   const placeContent = useCallback(
     (files: File[], text: string, screen?: { x: number; y: number }) => {
       const at = dropPoint(screen);
-      const images = files.filter((f) => f.type.startsWith("image/"));
+      const images = files.filter(
+        (f) => f.type.startsWith("image/") || isSvgFile(f),
+      );
       images.forEach((file, i) => {
         const offset = (i * 32) / at.scale;
-        placeImage(URL.createObjectURL(file), { ...at, x: at.x + offset, y: at.y + offset }, file);
+        placeImage(
+          URL.createObjectURL(file),
+          { ...at, x: at.x + offset, y: at.y + offset },
+          file,
+        );
       });
       if (images.length) return true;
 
@@ -301,17 +352,26 @@ export default function Canvas() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const t = e.target;
-      if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (
+        t instanceof HTMLElement &&
+        (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
+      )
+        return;
       const data = e.clipboardData;
       if (!data) return;
-      if (placeContent([...data.files], data.getData("text/plain"))) e.preventDefault();
+      const files = [...data.files];
+      const svg = svgFileFromClipboard(data);
+      if (svg && !files.some((f) => f === svg)) files.push(svg);
+      if (placeContent(files, data.getData("text/plain"))) e.preventDefault();
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [placeContent]);
 
   const updateArrow = useCallback((id: string, patch: Partial<ArrowItem>) => {
-    setArrows((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+    setArrows((prev) =>
+      prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev,
+    );
   }, []);
 
   const deleteArrow = useCallback((id: string) => {
@@ -324,7 +384,9 @@ export default function Canvas() {
   }, []);
 
   const updateText = useCallback((id: string, patch: Partial<TextItem>) => {
-    setTexts((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+    setTexts((prev) =>
+      prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev,
+    );
   }, []);
 
   const deleteText = useCallback((id: string) => {
@@ -364,7 +426,9 @@ export default function Canvas() {
 
   const center = useCallback(() => {
     const el = viewportRef.current;
-    return el ? { x: el.clientWidth / 2, y: el.clientHeight / 2 } : { x: 0, y: 0 };
+    return el
+      ? { x: el.clientWidth / 2, y: el.clientHeight / 2 }
+      : { x: 0, y: 0 };
   }, []);
 
   const zoomStep = (factor: number) => {
@@ -395,7 +459,12 @@ export default function Canvas() {
       const cx = (el.clientWidth / 2 - cam.x) / cam.scale;
       const cy = (el.clientHeight / 2 - cam.y) / cam.scale;
       if (l.hidden) {
-        updateLayout(id, { hidden: undefined, x: cx - l.w / 2, y: cy - (l.h + HEADER_HEIGHT) / 2, z: topZ() + 1 });
+        updateLayout(id, {
+          hidden: undefined,
+          x: cx - l.w / 2,
+          y: cy - (l.h + HEADER_HEIGHT) / 2,
+          z: topZ() + 1,
+        });
         setSelected(id);
         return;
       }
@@ -404,7 +473,8 @@ export default function Canvas() {
         {
           scale: cam.scale,
           x: el.clientWidth / 2 - (l.x + l.w / 2) * cam.scale,
-          y: el.clientHeight / 2 - (l.y + (l.h + HEADER_HEIGHT) / 2) * cam.scale,
+          y:
+            el.clientHeight / 2 - (l.y + (l.h + HEADER_HEIGHT) / 2) * cam.scale,
         },
         true,
       );
@@ -422,7 +492,11 @@ export default function Canvas() {
     const maxY = Math.max(...all.map((l) => l.y + l.h + HEADER_HEIGHT));
     const pad = 64;
     const scale = clampScale(
-      Math.min(1, (el.clientWidth - pad * 2) / (maxX - minX), (el.clientHeight - pad * 2) / (maxY - minY)),
+      Math.min(
+        1,
+        (el.clientWidth - pad * 2) / (maxX - minX),
+        (el.clientHeight - pad * 2) / (maxY - minY),
+      ),
     );
     setCamera(
       {
@@ -449,9 +523,18 @@ export default function Canvas() {
 
       if (zooming) {
         if (mouse) {
-          zoomBy(sx, sy, e.deltaY > 0 ? 1 / WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP, true);
+          zoomBy(
+            sx,
+            sy,
+            e.deltaY > 0 ? 1 / WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP,
+            true,
+          );
         } else {
-          zoomBy(sx, sy, Math.exp(-Math.max(-30, Math.min(30, e.deltaY)) * 0.01));
+          zoomBy(
+            sx,
+            sy,
+            Math.exp(-Math.max(-30, Math.min(30, e.deltaY)) * 0.01),
+          );
         }
       } else {
         const unit = e.deltaMode === 1 ? 16 : 1;
@@ -464,7 +547,8 @@ export default function Canvas() {
 
   useEffect(() => {
     const isTyping = (t: EventTarget | null) =>
-      t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+      t instanceof HTMLElement &&
+      (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -489,7 +573,8 @@ export default function Canvas() {
       }
       if (e.shiftKey && e.key === "!") fitAll();
       if (!mod && (e.key === "t" || e.key === "T")) addText();
-      if (!mod && (e.key === "a" || e.key === "A")) setTool((t) => (t === "arrow" ? "select" : "arrow"));
+      if (!mod && (e.key === "a" || e.key === "A"))
+        setTool((t) => (t === "arrow" ? "select" : "arrow"));
       if (e.key === "Backspace" || e.key === "Delete") {
         const id = selectedRef.current;
         if (id?.startsWith(TEXT_PREFIX)) deleteText(id);
@@ -509,7 +594,15 @@ export default function Canvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [addText, deleteArrow, deleteMedia, deleteText, fitAll, removeArtifact, resetZoom]);
+  }, [
+    addText,
+    deleteArrow,
+    deleteMedia,
+    deleteText,
+    fitAll,
+    removeArtifact,
+    resetZoom,
+  ]);
 
   const toWorld = (clientX: number, clientY: number) => {
     const rect = viewportRef.current!.getBoundingClientRect();
@@ -528,12 +621,17 @@ export default function Canvas() {
       const p = toWorld(e.clientX, e.clientY);
       const id = ARROW_PREFIX + crypto.randomUUID().slice(0, 8);
       drawing.current = { id, x1: p.x, y1: p.y };
-      setArrows((prev) => ({ ...prev, [id]: { x1: p.x, y1: p.y, x2: p.x, y2: p.y, z: topZ() + 1 } }));
+      setArrows((prev) => ({
+        ...prev,
+        [id]: { x1: p.x, y1: p.y, x2: p.x, y2: p.y, z: topZ() + 1 },
+      }));
       setSelected(id);
       return;
     }
-    const onBackground = e.target === e.currentTarget || (e.target as HTMLElement).dataset.world;
-    const wantsPan = e.button === 1 || (e.button === 0 && (spaceDown.current || onBackground));
+    const onBackground =
+      e.target === e.currentTarget || (e.target as HTMLElement).dataset.world;
+    const wantsPan =
+      e.button === 1 || (e.button === 0 && (spaceDown.current || onBackground));
     if (!wantsPan) return;
     if (onBackground) setSelected(null);
     e.preventDefault();
@@ -552,7 +650,9 @@ export default function Canvas() {
       if (e.shiftKey) {
         // Snap to 45° increments.
         const len = Math.hypot(x - d.x1, y - d.y1);
-        const angle = Math.round(Math.atan2(y - d.y1, x - d.x1) / (Math.PI / 4)) * (Math.PI / 4);
+        const angle =
+          Math.round(Math.atan2(y - d.y1, x - d.x1) / (Math.PI / 4)) *
+          (Math.PI / 4);
         x = d.x1 + Math.cos(angle) * len;
         y = d.y1 + Math.sin(angle) * len;
       }
@@ -571,7 +671,11 @@ export default function Canvas() {
     if (d) {
       drawing.current = null;
       const a = arrowsRef.current[d.id];
-      if (a && Math.hypot(a.x2 - a.x1, a.y2 - a.y1) * getCamera().scale < MIN_ARROW_LENGTH) {
+      if (
+        a &&
+        Math.hypot(a.x2 - a.x1, a.y2 - a.y1) * getCamera().scale <
+          MIN_ARROW_LENGTH
+      ) {
         deleteArrow(d.id);
       }
       setTool("select");
@@ -583,7 +687,8 @@ export default function Canvas() {
   const expandedArtifact = artifacts.find((a) => a.id === expanded);
   const dialTarget = expanded ?? selected;
   const dialTargetName = dialTarget
-    ? layouts[dialTarget]?.name || artifacts.find((a) => a.id === dialTarget)?.title
+    ? layouts[dialTarget]?.name ||
+      artifacts.find((a) => a.id === dialTarget)?.title
     : undefined;
 
   return (
@@ -598,7 +703,9 @@ export default function Canvas() {
         onPointerUp={endPan}
         onPointerCancel={endPan}
         onDoubleClick={(e) => {
-          const onBackground = e.target === e.currentTarget || (e.target as HTMLElement).dataset.world;
+          const onBackground =
+            e.target === e.currentTarget ||
+            (e.target as HTMLElement).dataset.world;
           if (!onBackground) return;
           const rect = e.currentTarget.getBoundingClientRect();
           addText(e.clientX - rect.left, e.clientY - rect.top);
@@ -612,12 +719,17 @@ export default function Canvas() {
           const rect = e.currentTarget.getBoundingClientRect();
           placeContent(
             [...e.dataTransfer.files],
-            e.dataTransfer.getData("text/uri-list").split("\n")[0] || e.dataTransfer.getData("text/plain"),
+            e.dataTransfer.getData("text/uri-list").split("\n")[0] ||
+              e.dataTransfer.getData("text/plain"),
             { x: e.clientX - rect.left, y: e.clientY - rect.top },
           );
         }}
       >
-        <div ref={worldRef} data-world className="absolute top-0 left-0 origin-top-left">
+        <div
+          ref={worldRef}
+          data-world
+          className="absolute top-0 left-0 origin-top-left"
+        >
           {artifacts
             .filter((a) => !layouts[a.id].hidden)
             .map((a) => (
@@ -675,8 +787,8 @@ export default function Canvas() {
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="text-center text-sm text-zinc-500">
               <div className="font-medium text-zinc-700">No artifacts yet</div>
-              Drop a <code className="font-mono">.tsx</code> file with a default export into{" "}
-              <code className="font-mono">/artifacts</code>
+              Drop a <code className="font-mono">.tsx</code> file with a default
+              export into <code className="font-mono">/artifacts</code>
             </div>
           </div>
         )}
@@ -687,8 +799,21 @@ export default function Canvas() {
         // Clicked buttons must not keep focus, or Space (pan) / Enter would re-trigger them.
         onMouseDown={(e) => e.preventDefault()}
       >
-        <ToolbarButton label="Add component (⌘K)" active={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <ToolbarButton
+          label="Add component (⌘K)"
+          active={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect x="4" y="4" width="6" height="6" rx="1.5" />
             <rect x="14" y="4" width="6" height="6" rx="1.5" />
             <rect x="4" y="14" width="6" height="6" rx="1.5" />
@@ -703,22 +828,45 @@ export default function Canvas() {
           active={tool === "arrow"}
           onClick={() => setTool((t) => (t === "arrow" ? "select" : "arrow"))}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M5 19 19 5M9 5h10v10" />
           </svg>
         </ToolbarButton>
         <div className="mx-0.5 h-5 w-px bg-white/10" />
-        <ToolbarButton label="Zoom out" onClick={() => zoomStep(1 / BUTTON_ZOOM_STEP)}>
+        <ToolbarButton
+          label="Zoom out"
+          onClick={() => zoomStep(1 / BUTTON_ZOOM_STEP)}
+        >
           −
         </ToolbarButton>
-        <ToolbarButton label="Reset zoom (⌘0)" className="w-12 tabular-nums" onClick={resetZoom}>
+        <ToolbarButton
+          label="Reset zoom (⌘0)"
+          className="w-12 tabular-nums"
+          onClick={resetZoom}
+        >
           <span ref={zoomLabelRef} />
         </ToolbarButton>
-        <ToolbarButton label="Zoom in" onClick={() => zoomStep(BUTTON_ZOOM_STEP)}>
+        <ToolbarButton
+          label="Zoom in"
+          onClick={() => zoomStep(BUTTON_ZOOM_STEP)}
+        >
           +
         </ToolbarButton>
         <div className="mx-0.5 h-5 w-px bg-white/10" />
-        <ToolbarButton label="Fit all (⇧1)" className="w-auto px-2.5" onClick={fitAll}>
+        <ToolbarButton
+          label="Fit all (⇧1)"
+          className="w-auto px-2.5"
+          onClick={fitAll}
+        >
           Fit
         </ToolbarButton>
       </div>
@@ -726,7 +874,9 @@ export default function Canvas() {
       {expandedArtifact && (
         <div
           className="fixed inset-0 z-[100000] flex flex-col bg-black/40 p-6 backdrop-blur-sm"
-          onPointerDown={(e) => e.target === e.currentTarget && setExpanded(null)}
+          onPointerDown={(e) =>
+            e.target === e.currentTarget && setExpanded(null)
+          }
         >
           <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex h-10 shrink-0 items-center justify-between border-b border-black/5 px-3">
@@ -742,7 +892,10 @@ export default function Canvas() {
               </button>
             </div>
             <div className="min-h-0 flex-1">
-              <ArtifactBody id={expandedArtifact.id} Component={expandedArtifact.Component} />
+              <ArtifactBody
+                id={expandedArtifact.id}
+                Component={expandedArtifact.Component}
+              />
             </div>
           </div>
         </div>
@@ -766,18 +919,33 @@ export default function Canvas() {
   );
 }
 
-function canScroll(target: EventTarget | null, dx: number, dy: number, stop: Element) {
+function canScroll(
+  target: EventTarget | null,
+  dx: number,
+  dy: number,
+  stop: Element,
+) {
   let node = target instanceof Element ? target : null;
   while (node && node !== stop) {
     const style = getComputedStyle(node);
-    const scrollY = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight;
-    const scrollX = /(auto|scroll)/.test(style.overflowX) && node.scrollWidth > node.clientWidth;
+    const scrollY =
+      /(auto|scroll)/.test(style.overflowY) &&
+      node.scrollHeight > node.clientHeight;
+    const scrollX =
+      /(auto|scroll)/.test(style.overflowX) &&
+      node.scrollWidth > node.clientWidth;
     if (scrollY && dy !== 0) {
-      const atEnd = dy > 0 ? node.scrollTop + node.clientHeight >= node.scrollHeight - 1 : node.scrollTop <= 0;
+      const atEnd =
+        dy > 0
+          ? node.scrollTop + node.clientHeight >= node.scrollHeight - 1
+          : node.scrollTop <= 0;
       if (!atEnd) return true;
     }
     if (scrollX && dx !== 0) {
-      const atEnd = dx > 0 ? node.scrollLeft + node.clientWidth >= node.scrollWidth - 1 : node.scrollLeft <= 0;
+      const atEnd =
+        dx > 0
+          ? node.scrollLeft + node.clientWidth >= node.scrollWidth - 1
+          : node.scrollLeft <= 0;
       if (!atEnd) return true;
     }
     node = node.parentElement;

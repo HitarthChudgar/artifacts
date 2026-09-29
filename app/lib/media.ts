@@ -16,7 +16,7 @@ export type MediaItem = {
   h: number;
   z: number;
 } & (
-  | { kind: "image"; src: string; name?: string; uploading?: boolean }
+  | { kind: "image"; src: string; name?: string; uploading?: boolean; svg?: boolean }
   | { kind: "link"; url: string; preview?: LinkPreview }
 );
 
@@ -38,6 +38,41 @@ export function parseUrl(text: string): URL | null {
 
 export const isImageUrl = (url: URL) => IMAGE_EXT.test(url.pathname);
 
+export const isSvgFile = (file: File) =>
+  file.type === "image/svg+xml" || /\.svg$/i.test(file.name);
+
+export const isSvgSrc = (src: string, name?: string) =>
+  /\.svg(\?|#|$)/i.test(src) ||
+  src.startsWith("data:image/svg+xml") ||
+  !!name?.toLowerCase().endsWith(".svg");
+
+/** Clipboard often carries SVG as markup, not a file. */
+export function svgFileFromClipboard(data: DataTransfer): File | null {
+  const fromFiles = [...data.files].find(isSvgFile);
+  if (fromFiles) return fromFiles;
+
+  const typed = data.getData("image/svg+xml");
+  if (looksLikeSvg(typed)) return svgFileFromMarkup(typed);
+
+  const text = data.getData("text/plain");
+  if (looksLikeSvg(text)) return svgFileFromMarkup(text);
+
+  const html = data.getData("text/html");
+  const embedded = html.match(/<svg[\s\S]*<\/svg>/i)?.[0];
+  if (embedded && looksLikeSvg(embedded)) return svgFileFromMarkup(embedded);
+
+  return null;
+}
+
+function looksLikeSvg(s: string) {
+  const t = s.trim();
+  return /^<svg[\s>]/i.test(t) || (t.startsWith("<?xml") && /<svg[\s>]/i.test(t));
+}
+
+function svgFileFromMarkup(markup: string) {
+  return new File([markup.trim()], "pasted.svg", { type: "image/svg+xml" });
+}
+
 export async function uploadImage(file: File): Promise<string> {
   const body = new FormData();
   body.append("file", file);
@@ -55,11 +90,26 @@ export async function fetchPreview(url: string): Promise<LinkPreview> {
   return { url, embeddable: false };
 }
 
-export function loadImageSize(src: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
+export async function loadImageSize(src: string): Promise<{ width: number; height: number }> {
+  const fromImg = await new Promise<{ width: number; height: number }>((resolve) => {
     const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth || 400, height: img.naturalHeight || 300 });
-    img.onerror = () => resolve({ width: 400, height: 300 });
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve({ width: 0, height: 0 });
     img.src = src;
   });
+  if (fromImg.width && fromImg.height) return fromImg;
+  if (isSvgSrc(src)) return (await readSvgSize(src)) ?? { width: 400, height: 300 };
+  return { width: 400, height: 300 };
+}
+
+async function readSvgSize(src: string) {
+  try {
+    const text = await (await fetch(src)).text();
+    const vb = text.match(/viewBox=["']([\d.\s,-]+)["']/i)?.[1].trim().split(/[\s,]+/).map(Number);
+    if (vb?.length === 4 && vb[2] > 0 && vb[3] > 0) return { width: vb[2], height: vb[3] };
+    const w = Number(text.match(/\bwidth=["']([\d.]+)/i)?.[1]);
+    const h = Number(text.match(/\bheight=["']([\d.]+)/i)?.[1]);
+    if (w && h) return { width: w, height: h };
+  } catch {}
+  return null;
 }
