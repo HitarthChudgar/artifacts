@@ -21,6 +21,8 @@ export type CardLayout = {
   h: number;
   z: number;
   name?: string;
+  /** Removed from the canvas; the file still exists and can be re-added from the command menu. */
+  hidden?: boolean;
 };
 
 export const HEADER_HEIGHT = 28;
@@ -35,6 +37,7 @@ type Props = {
   onChange: (id: string, patch: Partial<CardLayout>) => void;
   onSelect: (id: string) => void;
   onExpand: (id: string) => void;
+  onRemove: (id: string) => void;
 };
 
 function ArtifactCardImpl({
@@ -45,6 +48,7 @@ function ArtifactCardImpl({
   onChange,
   onSelect,
   onExpand,
+  onRemove,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const drag = useRef<{
@@ -135,6 +139,9 @@ function ArtifactCardImpl({
           </IconButton>
           <IconButton label="Expand" onClick={() => onExpand(artifact.id)}>
             <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+          </IconButton>
+          <IconButton label="Remove from canvas" onClick={() => onRemove(artifact.id)}>
+            <path d="M6 6l12 12M18 6 6 18" />
           </IconButton>
           <span className="flex h-6 w-5 items-center justify-center" aria-hidden>
             <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">

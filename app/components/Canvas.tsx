@@ -21,6 +21,7 @@ import {
   type MediaItem,
 } from "../lib/media";
 import { ArrowNode, type ArrowItem } from "./ArrowNode";
+import { CommandMenu } from "./CommandMenu";
 import { DialPanel } from "./DialPanel";
 import { MediaNode } from "./MediaNode";
 import { TextNode, type TextItem } from "./TextNode";
@@ -81,6 +82,7 @@ export default function Canvas() {
   const [selected, setSelected] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -375,9 +377,44 @@ export default function Canvas() {
     zoomTo(c.x, c.y, 1, true);
   }, [center, zoomTo]);
 
+  const removeArtifact = useCallback(
+    (id: string) => {
+      updateLayout(id, { hidden: true });
+      setSelected((s) => (s === id ? null : s));
+    },
+    [updateLayout],
+  );
+
+  /** Put a removed artifact back in the middle of the view, or pan to one that's already on the canvas. */
+  const showArtifact = useCallback(
+    (id: string) => {
+      const el = viewportRef.current;
+      const l = layoutsRef.current[id];
+      if (!el || !l) return;
+      const cam = getCamera();
+      const cx = (el.clientWidth / 2 - cam.x) / cam.scale;
+      const cy = (el.clientHeight / 2 - cam.y) / cam.scale;
+      if (l.hidden) {
+        updateLayout(id, { hidden: undefined, x: cx - l.w / 2, y: cy - (l.h + HEADER_HEIGHT) / 2, z: topZ() + 1 });
+        setSelected(id);
+        return;
+      }
+      select(id);
+      setCamera(
+        {
+          scale: cam.scale,
+          x: el.clientWidth / 2 - (l.x + l.w / 2) * cam.scale,
+          y: el.clientHeight / 2 - (l.y + (l.h + HEADER_HEIGHT) / 2) * cam.scale,
+        },
+        true,
+      );
+    },
+    [getCamera, select, setCamera, topZ, updateLayout],
+  );
+
   const fitAll = useCallback(() => {
     const el = viewportRef.current;
-    const all = Object.values(layoutsRef.current);
+    const all = Object.values(layoutsRef.current).filter((l) => !l.hidden);
     if (!el || all.length === 0) return;
     const minX = Math.min(...all.map((l) => l.x));
     const minY = Math.min(...all.map((l) => l.y));
@@ -430,6 +467,11 @@ export default function Canvas() {
       t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setMenuOpen((open) => !open);
+        return;
+      }
       if (isTyping(e.target)) return;
       if (e.code === "Space") {
         spaceDown.current = true;
@@ -453,6 +495,7 @@ export default function Canvas() {
         if (id?.startsWith(TEXT_PREFIX)) deleteText(id);
         else if (id?.startsWith(ARROW_PREFIX)) deleteArrow(id);
         else if (id?.startsWith(MEDIA_PREFIX)) deleteMedia(id);
+        else if (id && layoutsRef.current[id]) removeArtifact(id);
         else return;
         e.preventDefault();
       }
@@ -466,7 +509,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [addText, deleteArrow, deleteMedia, deleteText, fitAll, resetZoom]);
+  }, [addText, deleteArrow, deleteMedia, deleteText, fitAll, removeArtifact, resetZoom]);
 
   const toWorld = (clientX: number, clientY: number) => {
     const rect = viewportRef.current!.getBoundingClientRect();
@@ -575,18 +618,21 @@ export default function Canvas() {
         }}
       >
         <div ref={worldRef} data-world className="absolute top-0 left-0 origin-top-left">
-          {artifacts.map((a) => (
-            <ArtifactCard
-              key={a.id}
-              artifact={a}
-              layout={layouts[a.id]}
-              selected={selected === a.id}
-              getScale={getScale}
-              onChange={updateLayout}
-              onSelect={select}
-              onExpand={setExpanded}
-            />
-          ))}
+          {artifacts
+            .filter((a) => !layouts[a.id].hidden)
+            .map((a) => (
+              <ArtifactCard
+                key={a.id}
+                artifact={a}
+                layout={layouts[a.id]}
+                selected={selected === a.id}
+                getScale={getScale}
+                onChange={updateLayout}
+                onSelect={select}
+                onExpand={setExpanded}
+                onRemove={removeArtifact}
+              />
+            ))}
           {Object.entries(texts).map(([id, item]) => (
             <TextNode
               key={id}
@@ -641,6 +687,14 @@ export default function Canvas() {
         // Clicked buttons must not keep focus, or Space (pan) / Enter would re-trigger them.
         onMouseDown={(e) => e.preventDefault()}
       >
+        <ToolbarButton label="Add component (⌘K)" active={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="4" width="6" height="6" rx="1.5" />
+            <rect x="14" y="4" width="6" height="6" rx="1.5" />
+            <rect x="4" y="14" width="6" height="6" rx="1.5" />
+            <path d="M17 14v6M14 17h6" />
+          </svg>
+        </ToolbarButton>
         <ToolbarButton label="Add text (T)" onClick={() => addText()}>
           <span className="font-serif text-[15px] font-semibold">T</span>
         </ToolbarButton>
@@ -707,6 +761,17 @@ export default function Canvas() {
       <div className="relative z-[100001]">
         <DialPanel artifactId={dialTarget} title={dialTargetName} />
       </div>
+
+      <CommandMenu
+        open={menuOpen}
+        items={artifacts.map((a) => ({
+          id: a.id,
+          title: layouts[a.id]?.name || a.title,
+          onCanvas: !layouts[a.id]?.hidden,
+        }))}
+        onPick={showArtifact}
+        onClose={() => setMenuOpen(false)}
+      />
     </div>
   );
 }

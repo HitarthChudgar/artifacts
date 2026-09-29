@@ -75,6 +75,8 @@ export default function Card() {
 | Resize a card           | Drag its bottom-right corner                                 |
 | Rename                  | Double-click the title or click the pencil icon (Enter saves, Esc cancels) |
 | Expand                  | Click the expand icon · Esc closes                           |
+| Remove a card           | Click its × icon, or select it and press Delete/Backspace (the file stays in `/artifacts`) |
+| Add / re-add a card     | ⌘K or the grid button in the toolbar · type to filter · ↑↓ and Enter · on-canvas cards are panned to |
 | Deselect                | Click empty space or press Esc                               |
 | Add text                | Double-click empty space, press T, or use the T button       |
 | Edit text               | Double-click it · Esc or ⌘Enter finishes (empty text is removed) |
@@ -101,6 +103,7 @@ app/
     Canvas.tsx             viewport, selection, toolbar, expanded view
     ArtifactCard.tsx       card chrome: drag, resize, rename, error boundary
     DialPanel.tsx          DialKit panel for the selected artifact
+    CommandMenu.tsx        ⌘K menu to add removed cards or jump to one
     TextNode.tsx           text notes: edit, move, drag-to-scale
     ArrowNode.tsx          arrows: move, drag endpoints
     MediaNode.tsx          images and website iframes: move, resize
