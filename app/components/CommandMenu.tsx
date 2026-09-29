@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 export type CommandItem = {
   id: string;
@@ -61,14 +61,17 @@ function MenuBody({ items, onPick, onClose }: Omit<Props, "open">) {
     .sort((a, b) => Number(a.onCanvas) - Number(b.onCanvas));
   const index = Math.min(active, results.length - 1);
 
-  useEffect(() => {
-    listRef.current?.children[index]?.scrollIntoView({ block: "nearest" });
-  }, [index]);
-
   const pick = (item: CommandItem | undefined) => {
     if (!item) return;
     onPick(item.id);
     onClose();
+  };
+
+  const move = (next: number, scroll = false) => {
+    setActive(next);
+    if (scroll) {
+      listRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
+    }
   };
 
   return (
@@ -85,7 +88,7 @@ function MenuBody({ items, onPick, onClose }: Omit<Props, "open">) {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
             e.preventDefault();
             const step = e.key === "ArrowDown" ? 1 : -1;
-            setActive((index + step + results.length) % Math.max(1, results.length));
+            move((index + step + results.length) % Math.max(1, results.length), true);
           } else if (e.key === "Enter") {
             e.preventDefault();
             pick(results[index]);
@@ -96,20 +99,24 @@ function MenuBody({ items, onPick, onClose }: Omit<Props, "open">) {
         }}
         className="h-11 w-full border-b border-white/10 bg-transparent px-3.5 text-[14px] text-white outline-none placeholder:text-white/40"
       />
-      <div ref={listRef} className="flex max-h-72 flex-col gap-1.5 overflow-y-auto p-1.5">
+      <div ref={listRef} className="max-h-72 overflow-y-auto p-1.5">
         {results.map((item, i) => (
           <button
             key={item.id}
             type="button"
             onMouseDown={(e) => e.preventDefault()}
-            onPointerMove={() => i !== index && setActive(i)}
+            onPointerEnter={() => i !== index && move(i)}
             onClick={() => pick(item)}
-            className={`flex h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 text-left text-[14px] ${
-              i === index ? "bg-white/15 text-white" : "hover:bg-white/10 hover:text-white"
-            }`}
+            className="flex h-9 w-full cursor-pointer items-center px-0 text-left"
           >
-            <span className="min-w-0 flex-1 truncate">{item.title}</span>
-            <span className="shrink-0 text-[14px] text-white/40">{item.onCanvas ? "Go to" : "Add"}</span>
+            <span
+              className={`flex h-full w-full items-center gap-3 rounded-lg px-2.5 text-[14px] ${
+                i === index ? "bg-white/15 text-white" : ""
+              }`}
+            >
+              <span className="min-w-0 flex-1 truncate">{item.title}</span>
+              <span className="shrink-0 text-[14px] text-white/40">{item.onCanvas ? "Go to" : "Add"}</span>
+            </span>
           </button>
         ))}
         {results.length === 0 && (
