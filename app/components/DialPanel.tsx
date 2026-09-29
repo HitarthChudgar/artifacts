@@ -37,10 +37,10 @@ export function DialPanel({ artifactId, title }: { artifactId: string | null; ti
             data-origin-y="top"
             data-mode="popover"
             data-multiple={visible.length > 1 ? "true" : undefined}
-            initial={{ opacity: 0, x: 12, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 12, scale: 0.98 }}
-            transition={{ type: "spring", visualDuration: 0.25, bounce: 0.1 }}
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            transition={{ type: "spring", visualDuration: 0.15, bounce: 0 }}
           >
             <div className="dialkit-panel-wrapper">
               {visible.length === 1 ? (

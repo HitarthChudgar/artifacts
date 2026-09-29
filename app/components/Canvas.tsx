@@ -683,7 +683,7 @@ export default function Canvas() {
       </div>
 
       <div
-        className="absolute right-4 bottom-4 flex items-center gap-0.5 rounded-full bg-[#212121] p-1 text-xs text-zinc-300 shadow-lg ring-1 ring-white/10 select-none"
+        className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[14px] bg-[#212121] p-1.5 text-[14px] text-white/70 shadow-[0_4px_16px_rgba(0,0,0,0.25)] ring-1 ring-white/10 select-none"
         // Clicked buttons must not keep focus, or Space (pan) / Enter would re-trigger them.
         onMouseDown={(e) => e.preventDefault()}
       >
@@ -696,7 +696,7 @@ export default function Canvas() {
           </svg>
         </ToolbarButton>
         <ToolbarButton label="Add text (T)" onClick={() => addText()}>
-          <span className="font-serif text-[15px] font-semibold">T</span>
+          <span className="font-serif font-semibold">T</span>
         </ToolbarButton>
         <ToolbarButton
           label="Arrow (A)"
@@ -707,30 +707,20 @@ export default function Canvas() {
             <path d="M5 19 19 5M9 5h10v10" />
           </svg>
         </ToolbarButton>
-        <div className="mx-0.5 h-4 w-px bg-white/10" />
+        <div className="mx-0.5 h-5 w-px bg-white/10" />
         <ToolbarButton label="Zoom out" onClick={() => zoomStep(1 / BUTTON_ZOOM_STEP)}>
           −
         </ToolbarButton>
-        <button
-          type="button"
-          title="Reset zoom (⌘0)"
-          onClick={resetZoom}
-          className="h-7 w-12 rounded-full font-mono tabular-nums hover:bg-white/10 hover:text-white"
-        >
+        <ToolbarButton label="Reset zoom (⌘0)" className="w-12 tabular-nums" onClick={resetZoom}>
           <span ref={zoomLabelRef} />
-        </button>
+        </ToolbarButton>
         <ToolbarButton label="Zoom in" onClick={() => zoomStep(BUTTON_ZOOM_STEP)}>
           +
         </ToolbarButton>
-        <div className="mx-0.5 h-4 w-px bg-white/10" />
-        <button
-          type="button"
-          title="Fit all (⇧1)"
-          onClick={fitAll}
-          className="h-7 rounded-full px-2.5 hover:bg-white/10 hover:text-white"
-        >
+        <div className="mx-0.5 h-5 w-px bg-white/10" />
+        <ToolbarButton label="Fit all (⇧1)" className="w-auto px-2.5" onClick={fitAll}>
           Fit
-        </button>
+        </ToolbarButton>
       </div>
 
       {expandedArtifact && (
@@ -798,11 +788,13 @@ function canScroll(target: EventTarget | null, dx: number, dy: number, stop: Ele
 function ToolbarButton({
   label,
   active,
+  className = "w-9",
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  className?: string;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -813,9 +805,9 @@ function ToolbarButton({
       aria-pressed={active}
       title={label}
       onClick={onClick}
-      className={`flex h-7 w-7 items-center justify-center rounded-full text-sm hover:bg-white/10 hover:text-white ${
+      className={`flex h-9 cursor-pointer items-center justify-center rounded-lg text-[14px] hover:bg-white/10 hover:text-white ${
         active ? "bg-white/15 text-white" : ""
-      }`}
+      } ${className}`}
     >
       {children}
     </button>

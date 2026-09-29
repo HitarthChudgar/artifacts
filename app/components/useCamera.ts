@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type RefObject,
+} from "react";
 
 export type Camera = { x: number; y: number; scale: number };
 
@@ -10,7 +16,8 @@ const DOT_SPACING = 20;
 // Higher = snappier easing toward the target camera.
 const SMOOTHING = 16;
 
-export const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+export const clampScale = (s: number) =>
+  Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 
 type Anchor = { sx: number; sy: number; wx: number; wy: number };
 
@@ -58,9 +65,12 @@ export function useCamera({
       viewport.style.backgroundSize = `${dot}px ${dot}px`;
       viewport.style.backgroundPosition = `${x}px ${y}px`;
       viewport.style.backgroundImage =
-        scale < 0.35 ? "none" : "radial-gradient(circle, #d4d4d8 1px, transparent 1px)";
+        scale < 0.35
+          ? "none"
+          : "radial-gradient(circle, #d4d4d8 1px, transparent 1px)";
     }
-    if (labelRef.current) labelRef.current.textContent = `${Math.round(scale * 100)}%`;
+    if (labelRef.current)
+      labelRef.current.textContent = `${Math.round(scale * 100)}%`;
 
     // Drop will-change once idle so the browser re-rasterizes text crisply at the new scale.
     clearTimeout(settleTimer.current);
@@ -82,7 +92,9 @@ export function useCamera({
       const k = 1 - Math.exp(-SMOOTHING * dt);
 
       // Interpolate zoom in log space so it feels even at every zoom level.
-      const scale = Math.exp(Math.log(c.scale) + (Math.log(t.scale) - Math.log(c.scale)) * k);
+      const scale = Math.exp(
+        Math.log(c.scale) + (Math.log(t.scale) - Math.log(c.scale)) * k,
+      );
       const a = anchor.current;
       const next = a
         ? { scale, x: a.sx - a.wx * scale, y: a.sy - a.wy * scale }
@@ -125,10 +137,18 @@ export function useCamera({
     (dx: number, dy: number, animate = false) => {
       if (animate) {
         anchor.current = null;
-        target.current = { ...target.current, x: target.current.x + dx, y: target.current.y + dy };
+        target.current = {
+          ...target.current,
+          x: target.current.x + dx,
+          y: target.current.y + dy,
+        };
         startAnimation();
       } else {
-        current.current = { ...current.current, x: current.current.x + dx, y: current.current.y + dy };
+        current.current = {
+          ...current.current,
+          x: current.current.x + dx,
+          y: current.current.y + dy,
+        };
         jump();
       }
     },
@@ -157,7 +177,8 @@ export function useCamera({
   const zoomBy = useCallback(
     (sx: number, sy: number, factor: number, animate = false) => {
       // Stack consecutive animated zooms onto the pending target instead of the in-flight value.
-      const base = animate && frame.current ? target.current.scale : current.current.scale;
+      const base =
+        animate && frame.current ? target.current.scale : current.current.scale;
       zoomTo(sx, sy, base * factor, animate);
     },
     [zoomTo],

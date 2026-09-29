@@ -34,7 +34,7 @@ export function CommandMenu({ open, items, onPick, onClose }: Props) {
           <motion.div
             role="dialog"
             aria-label="Add a component"
-            className="relative w-[420px] max-w-[calc(100vw-32px)] origin-center overflow-hidden rounded-[14px] bg-[#212121] text-[14px] text-white/70 shadow-[0_8px_32px_rgba(0,0,0,0.5)] ring-1 ring-white/10"
+            className="relative w-[420px] max-w-[calc(100vw-32px)] origin-center overflow-hidden rounded-[14px] bg-[#212121] text-[14px] text-white/70 shadow-[0_4px_16px_rgba(0,0,0,0.25)] ring-1 ring-white/10"
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.92 }}
