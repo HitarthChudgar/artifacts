@@ -36,8 +36,6 @@ type Props = {
   getScale: () => number;
   onChange: (id: string, patch: Partial<CardLayout>) => void;
   onSelect: (id: string) => void;
-  onExpand: (id: string) => void;
-  onRemove: (id: string) => void;
 };
 
 function ArtifactCardImpl({
@@ -47,8 +45,6 @@ function ArtifactCardImpl({
   getScale,
   onChange,
   onSelect,
-  onExpand,
-  onRemove,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const drag = useRef<{
@@ -62,7 +58,7 @@ function ArtifactCardImpl({
 
   const startDrag = (e: ReactPointerEvent<HTMLElement>, mode: "move" | "resize") => {
     if (e.button !== 0 || editing) return;
-    if ((e.target as HTMLElement).closest("button")) return;
+    if ((e.target as HTMLElement).closest("input")) return;
     e.preventDefault();
     e.stopPropagation();
     capturePointer(e.currentTarget, e.pointerId);
@@ -122,42 +118,19 @@ function ArtifactCardImpl({
           />
         ) : (
           <span
-            className="min-w-0 flex-1 truncate px-1 font-mono text-[11px] text-zinc-500"
+            className="min-w-0 flex-1 truncate px-1 text-[11px] text-zinc-500"
             onDoubleClick={() => setEditing(true)}
             title="Double-click to rename"
           >
             {name}
           </span>
         )}
-        <div
-          className={`flex shrink-0 items-center gap-0.5 text-zinc-500 transition-opacity ${
-            selected || editing ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          }`}
-        >
-          <IconButton label="Rename" onClick={() => setEditing(true)}>
-            <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
-          </IconButton>
-          <IconButton label="Expand" onClick={() => onExpand(artifact.id)}>
-            <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
-          </IconButton>
-          <IconButton label="Remove from canvas" onClick={() => onRemove(artifact.id)}>
-            <path d="M6 6l12 12M18 6 6 18" />
-          </IconButton>
-          <span className="flex h-6 w-5 items-center justify-center" aria-hidden>
-            <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
-              {[2, 7, 12].flatMap((cy) =>
-                [2, 8].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.3" />),
-              )}
-            </svg>
-          </span>
-        </div>
       </div>
 
       <div
-        className={`relative overflow-hidden bg-white transition-shadow ${
+        className={`relative overflow-hidden bg-white ${
           selected ? "ring-2 ring-blue-500/70" : "ring-1 ring-black/5"
         }`}
-        style={{ height: layout.h }}
       >
         <ArtifactBody id={artifact.id} Component={artifact.Component} />
         <div
@@ -185,7 +158,7 @@ export const ArtifactBody = memo(function ArtifactBody({
   return (
     <ArtifactContext.Provider value={id}>
       <ErrorBoundary>
-        <div className="h-full w-full overflow-auto">
+        <div className="w-full p-4">
           <Component />
         </div>
       </ErrorBoundary>
@@ -224,41 +197,8 @@ function RenameInput({
         if (e.key === "Enter") finish(value);
         if (e.key === "Escape") finish(null);
       }}
-      className="h-6 min-w-0 flex-1 rounded-md border border-blue-500 bg-white px-1.5 font-mono text-[11px] text-zinc-800 outline-none"
+      className="h-6 min-w-0 flex-1 rounded-md border border-blue-500 bg-white px-1.5 text-[11px] text-zinc-800 outline-none"
     />
-  );
-}
-
-function IconButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 hover:text-zinc-900"
-    >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {children}
-      </svg>
-    </button>
   );
 }
 

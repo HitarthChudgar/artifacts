@@ -46,8 +46,8 @@ export default function Invite() {
 
   return (
     <div
-      className="flex h-full w-full flex-col justify-between"
-      style={{ background: colors.background, color: colors.text, padding: layout.padding }}
+      className="flex w-full flex-col justify-between"
+      style={{ background: colors.background, color: colors.text, padding: layout.padding, height: 480 }}
     >
       <div>
         <div style={{ fontSize: layout.titleSize, fontWeight: layout.titleWeight, lineHeight: 1.2 }}>

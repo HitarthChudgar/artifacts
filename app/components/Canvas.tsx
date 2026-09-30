@@ -741,8 +741,6 @@ export default function Canvas() {
                 getScale={getScale}
                 onChange={updateLayout}
                 onSelect={select}
-                onExpand={setExpanded}
-                onRemove={removeArtifact}
               />
             ))}
           {Object.entries(texts).map(([id, item]) => (

@@ -3,7 +3,7 @@ export const meta = { title: "stripes", width: 300, height: 400 };
 export default function Stripes() {
   const rows = Array.from({ length: 28 });
   return (
-    <div className="flex h-full w-full flex-col justify-between overflow-hidden bg-yellow-200 py-2">
+    <div className="flex h-[400px] w-full flex-col justify-between overflow-hidden bg-yellow-200 py-2">
       {rows.map((_, i) => {
         const t = Math.sin((i / rows.length) * Math.PI);
         return (

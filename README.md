@@ -70,12 +70,11 @@ export default function Card() {
 | ----------------------- | ------------------------------------------------------------ |
 | Pan                     | Drag empty space, two-finger scroll, Space + drag, or middle-click drag |
 | Zoom                    | Pinch, or ⌘/Ctrl + scroll                                    |
-| Zoom controls           | Bottom-right toolbar · ⌘0 resets to 100% · ⇧1 fits everything |
+| Zoom controls           | Bottom toolbar · ⌘0 resets to 100% · ⇧1 fits everything |
 | Move a card             | Drag its title bar                                           |
 | Resize a card           | Drag its bottom-right corner                                 |
-| Rename                  | Double-click the title or click the pencil icon (Enter saves, Esc cancels) |
-| Expand                  | Click the expand icon · Esc closes                           |
-| Remove a card           | Click its × icon, or select it and press Delete/Backspace (the file stays in `/artifacts`) |
+| Rename                  | Double-click the title (Enter saves, Esc cancels)            |
+| Remove a card           | Select it and press Delete/Backspace (the file stays in `/artifacts`) |
 | Add / re-add a card     | ⌘K or the grid button in the toolbar · type to filter · ↑↓ and Enter · on-canvas cards are panned to |
 | Deselect                | Click empty space or press Esc                               |
 | Add text                | Double-click empty space, press T, or use the T button       |

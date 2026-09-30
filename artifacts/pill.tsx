@@ -8,7 +8,7 @@ export default function Pill() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-stone-100">
+    <div className="flex h-[360px] w-full items-center justify-center bg-stone-100">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex h-14 items-center gap-3 overflow-hidden rounded-full bg-sky-300 px-5 text-lg font-bold text-zinc-900 transition-all duration-500"

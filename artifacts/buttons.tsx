@@ -44,10 +44,7 @@ export default function Buttons() {
   const dial = useArtifactDial("Buttons", config);
 
   return (
-    <div
-      className="flex h-full w-full flex-col gap-6 overflow-auto p-6"
-      style={{ background: dial.background }}
-    >
+    <div className="flex w-full flex-col gap-4" style={{ background: dial.background }}>
       <Section title="Variants">
         {VARIANTS.map((v) => (
           <Button key={v} variant={v} dial={dial}>
