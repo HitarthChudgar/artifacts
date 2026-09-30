@@ -5,6 +5,7 @@
 import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { LinkPreview, MediaItem } from "../lib/media";
 import { capturePointer } from "../lib/pointer";
+import type { SnapMove } from "../lib/snap";
 import { HEADER_HEIGHT } from "./ArtifactCard";
 
 const MIN_SIZE = 40;
@@ -16,6 +17,8 @@ type Props = {
   getScale: () => number;
   onChange: (id: string, patch: Partial<MediaItem>) => void;
   onSelect: (id: string) => void;
+  snap: SnapMove;
+  onSnapEnd: () => void;
 };
 
 type Corner = { sx: 1 | -1; sy: 1 | -1 };
@@ -35,7 +38,16 @@ type Drag = {
   origin: MediaItem;
 };
 
-function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Props) {
+function MediaNodeImpl({
+  id,
+  item,
+  selected,
+  getScale,
+  onChange,
+  onSelect,
+  snap,
+  onSnapEnd,
+}: Props) {
   const drag = useRef<Drag | null>(null);
 
   const startDrag = (e: ReactPointerEvent<HTMLElement>, mode: Drag["mode"], corner: Corner = { sx: 1, sy: 1 }) => {
@@ -56,7 +68,11 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
     const dy = (e.clientY - d.startY) / scale;
     const o = d.origin;
     if (d.mode === "move") {
-      onChange(id, { x: o.x + dx, y: o.y + dy });
+      const h = o.kind === "link" ? o.h + HEADER_HEIGHT : o.h;
+      onChange(
+        id,
+        snap(id, { x: o.x + dx, y: o.y + dy, w: o.w, h }, { disable: e.ctrlKey }),
+      );
     } else if (o.kind === "image") {
       // Grow by whichever axis moved further, then derive the other from the aspect ratio,
       // keeping the opposite corner fixed.
@@ -72,6 +88,7 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
 
   const endDrag = () => {
     drag.current = null;
+    onSnapEnd();
   };
 
   const ring = selected ? "ring-2 ring-blue-500/70" : "ring-1 ring-black/5";
@@ -89,6 +106,7 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
   if (item.kind === "image") {
     return (
       <div
+        data-node-id={id}
         className={`absolute cursor-grab active:cursor-grabbing ${ring}`}
         style={{ transform: `translate(${item.x}px, ${item.y}px)`, width: item.w, height: item.h, zIndex: item.z }}
         onPointerDown={(e) => startDrag(e, "move")}
@@ -137,6 +155,7 @@ function MediaNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
 
   return (
     <div
+      data-node-id={id}
       className="group absolute"
       style={{ transform: `translate(${item.x}px, ${item.y}px)`, width: item.w, zIndex: item.z }}
     >

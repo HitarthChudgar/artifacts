@@ -13,6 +13,7 @@ import {
 import type { Artifact } from "../lib/artifacts";
 import { ArtifactContext } from "../lib/dial";
 import { capturePointer } from "../lib/pointer";
+import type { SnapMove } from "../lib/snap";
 
 export type CardLayout = {
   x: number;
@@ -36,6 +37,8 @@ type Props = {
   getScale: () => number;
   onChange: (id: string, patch: Partial<CardLayout>) => void;
   onSelect: (id: string) => void;
+  snap: SnapMove;
+  onSnapEnd: () => void;
 };
 
 function ArtifactCardImpl({
@@ -45,13 +48,17 @@ function ArtifactCardImpl({
   getScale,
   onChange,
   onSelect,
+  snap,
+  onSnapEnd,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{
     mode: "move" | "resize";
     startX: number;
     startY: number;
     origin: CardLayout;
+    h: number;
   } | null>(null);
 
   const name = layout.name || artifact.title;
@@ -62,7 +69,13 @@ function ArtifactCardImpl({
     e.preventDefault();
     e.stopPropagation();
     capturePointer(e.currentTarget, e.pointerId);
-    drag.current = { mode, startX: e.clientX, startY: e.clientY, origin: layout };
+    drag.current = {
+      mode,
+      startX: e.clientX,
+      startY: e.clientY,
+      origin: layout,
+      h: rootRef.current?.offsetHeight ?? layout.h + HEADER_HEIGHT,
+    };
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
@@ -72,7 +85,14 @@ function ArtifactCardImpl({
     const dx = (e.clientX - d.startX) / scale;
     const dy = (e.clientY - d.startY) / scale;
     if (d.mode === "move") {
-      onChange(artifact.id, { x: d.origin.x + dx, y: d.origin.y + dy });
+      onChange(
+        artifact.id,
+        snap(
+          artifact.id,
+          { x: d.origin.x + dx, y: d.origin.y + dy, w: d.origin.w, h: d.h },
+          { disable: e.ctrlKey },
+        ),
+      );
     } else {
       onChange(artifact.id, {
         w: Math.max(MIN_W, d.origin.w + dx),
@@ -83,10 +103,13 @@ function ArtifactCardImpl({
 
   const endDrag = () => {
     drag.current = null;
+    onSnapEnd();
   };
 
   return (
     <div
+      ref={rootRef}
+      data-node-id={artifact.id}
       className="group absolute"
       style={{
         transform: `translate(${layout.x}px, ${layout.y}px)`,

@@ -34,6 +34,13 @@ import { DialPanel } from "./DialPanel";
 import { MediaNode } from "./MediaNode";
 import { TextNode, type TextItem } from "./TextNode";
 import { clampScale, useCamera, type Camera } from "./useCamera";
+import {
+  collectSnapRects,
+  SNAP_SCREEN,
+  snapBox,
+  type AlignGuide,
+  type SnapMove,
+} from "../lib/snap";
 
 type Saved = {
   camera: Camera;
@@ -100,6 +107,7 @@ export default function Canvas() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [guides, setGuides] = useState<AlignGuide[]>([]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -187,6 +195,37 @@ export default function Canvas() {
   const { getCamera, panBy, zoomBy, zoomTo, setCamera } = camera;
 
   const getScale = useCallback(() => getCamera().scale, [getCamera]);
+
+  const snapMove = useCallback<SnapMove>(
+    (id, box, opts) => {
+      if (opts?.disable) {
+        setGuides((g) => (g.length ? [] : g));
+        return { x: box.x, y: box.y };
+      }
+      const viewport = viewportRef.current;
+      const world = worldRef.current;
+      if (!viewport || !world) return { x: box.x, y: box.y };
+      const cam = getCamera();
+      const result = snapBox(
+        box,
+        collectSnapRects(
+          id,
+          world,
+          viewport.getBoundingClientRect(),
+          cam,
+          arrowsRef.current,
+        ),
+        SNAP_SCREEN / cam.scale,
+      );
+      setGuides(result.guides);
+      return { x: result.x, y: result.y };
+    },
+    [getCamera],
+  );
+
+  const endSnap = useCallback(() => {
+    setGuides((g) => (g.length ? [] : g));
+  }, []);
 
   const updateLayout = useCallback((id: string, patch: Partial<CardLayout>) => {
     setStored((prev) => ({
@@ -614,6 +653,10 @@ export default function Canvas() {
   };
 
   const onPointerDownCapture = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused.closest("[data-toolbar]")) {
+      focused.blur();
+    }
     if (tool === "arrow" && e.button === 0 && !spaceDown.current) {
       e.preventDefault();
       e.stopPropagation();
@@ -741,6 +784,8 @@ export default function Canvas() {
                 getScale={getScale}
                 onChange={updateLayout}
                 onSelect={select}
+                snap={snapMove}
+                onSnapEnd={endSnap}
               />
             ))}
           {Object.entries(texts).map(([id, item]) => (
@@ -755,6 +800,8 @@ export default function Canvas() {
               onSelect={select}
               onEdit={setEditingText}
               onDelete={deleteText}
+              snap={snapMove}
+              onSnapEnd={endSnap}
             />
           ))}
           {Object.entries(media).map(([id, item]) => (
@@ -766,6 +813,8 @@ export default function Canvas() {
               getScale={getScale}
               onChange={updateMedia}
               onSelect={select}
+              snap={snapMove}
+              onSnapEnd={endSnap}
             />
           ))}
           {Object.entries(arrows).map(([id, item]) => (
@@ -777,8 +826,31 @@ export default function Canvas() {
               getScale={getScale}
               onChange={updateArrow}
               onSelect={select}
+              snap={snapMove}
+              onSnapEnd={endSnap}
             />
           ))}
+          {guides.length > 0 && (
+            <svg
+              className="pointer-events-none absolute top-0 left-0 overflow-visible"
+              width={1}
+              height={1}
+              style={{ zIndex: 2147483646 }}
+            >
+              {guides.map((g) => (
+                <line
+                  key={`${g.axis}:${g.pos}:${g.start}:${g.end}`}
+                  x1={g.axis === "x" ? g.pos : g.start}
+                  y1={g.axis === "x" ? g.start : g.pos}
+                  x2={g.axis === "x" ? g.pos : g.end}
+                  y2={g.axis === "x" ? g.end : g.pos}
+                  stroke="#EF4444"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </svg>
+          )}
         </div>
 
         {artifacts.length === 0 && (
@@ -793,6 +865,7 @@ export default function Canvas() {
       </div>
 
       <div
+        data-toolbar
         className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[14px] bg-[#212121] p-1.5 text-[14px] text-white/70 shadow-[0_4px_16px_rgba(0,0,0,0.25)] ring-1 ring-white/10 select-none"
         // Clicked buttons must not keep focus, or Space (pan) / Enter would re-trigger them.
         onMouseDown={(e) => e.preventDefault()}
@@ -970,8 +1043,11 @@ function ToolbarButton({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      onClick={onClick}
-      className={`flex h-9 cursor-pointer items-center justify-center rounded-lg text-[14px] hover:bg-white/10 hover:text-white ${
+      onClick={(e) => {
+        onClick();
+        e.currentTarget.blur();
+      }}
+      className={`flex h-9 cursor-pointer items-center justify-center rounded-lg text-[14px] outline-none hover:bg-white/10 hover:text-white ${
         active ? "bg-white/15 text-white" : ""
       } ${className}`}
     >

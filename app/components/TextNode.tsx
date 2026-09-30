@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { capturePointer } from "../lib/pointer";
+import type { SnapMove } from "../lib/snap";
 
 export type TextItem = {
   x: number;
@@ -33,6 +34,8 @@ type Props = {
   onSelect: (id: string) => void;
   onEdit: (id: string | null) => void;
   onDelete: (id: string) => void;
+  snap: SnapMove;
+  onSnapEnd: () => void;
 };
 
 function TextNodeImpl({
@@ -45,10 +48,12 @@ function TextNodeImpl({
   onSelect,
   onEdit,
   onDelete,
+  snap,
+  onSnapEnd,
 }: Props) {
   const textRef = useRef<HTMLDivElement>(null);
   const drag = useRef<
-    | { mode: "move"; startX: number; startY: number; x: number; y: number }
+    | { mode: "move"; startX: number; startY: number; x: number; y: number; w: number; h: number }
     | {
         mode: "scale";
         sx: 1 | -1;
@@ -91,7 +96,15 @@ function TextNodeImpl({
     e.preventDefault();
     onSelect(id);
     capturePointer(e.currentTarget, e.pointerId);
-    drag.current = { mode: "move", startX: e.clientX, startY: e.clientY, x: item.x, y: item.y };
+    drag.current = {
+      mode: "move",
+      startX: e.clientX,
+      startY: e.clientY,
+      x: item.x,
+      y: item.y,
+      w: textRef.current?.offsetWidth ?? 0,
+      h: textRef.current?.offsetHeight ?? 0,
+    };
   };
 
   const startScale = (e: ReactPointerEvent<HTMLDivElement>, sx: 1 | -1, sy: 1 | -1) => {
@@ -122,7 +135,14 @@ function TextNodeImpl({
     const dx = (e.clientX - d.startX) / scale;
     const dy = (e.clientY - d.startY) / scale;
     if (d.mode === "move") {
-      onChange(id, { x: d.x + dx, y: d.y + dy });
+      onChange(
+        id,
+        snap(
+          id,
+          { x: d.x + dx, y: d.y + dy, w: d.w, h: d.h },
+          { disable: e.ctrlKey },
+        ),
+      );
     } else {
       // Project the drag onto the box diagonal so the corner tracks the pointer.
       const factor =
@@ -139,10 +159,12 @@ function TextNodeImpl({
 
   const endDrag = () => {
     drag.current = null;
+    onSnapEnd();
   };
 
   return (
     <div
+      data-node-id={id}
       className="absolute"
       style={{ transform: `translate(${item.x}px, ${item.y}px)`, zIndex: item.z }}
     >

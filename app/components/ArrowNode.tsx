@@ -2,6 +2,7 @@
 
 import { memo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { capturePointer } from "../lib/pointer";
+import type { SnapMove } from "../lib/snap";
 
 export type ArrowItem = {
   x1: number;
@@ -22,11 +23,22 @@ type Props = {
   getScale: () => number;
   onChange: (id: string, patch: Partial<ArrowItem>) => void;
   onSelect: (id: string) => void;
+  snap: SnapMove;
+  onSnapEnd: () => void;
 };
 
 type Drag = { part: "body" | "start" | "end"; startX: number; startY: number; origin: ArrowItem };
 
-function ArrowNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Props) {
+function ArrowNodeImpl({
+  id,
+  item,
+  selected,
+  getScale,
+  onChange,
+  onSelect,
+  snap,
+  onSnapEnd,
+}: Props) {
   const drag = useRef<Drag | null>(null);
   const { x1, y1, x2, y2 } = item;
 
@@ -62,13 +74,35 @@ function ArrowNodeImpl({ id, item, selected, getScale, onChange, onSelect }: Pro
     const dx = (e.clientX - d.startX) / scale;
     const dy = (e.clientY - d.startY) / scale;
     const o = d.origin;
-    if (d.part === "body") onChange(id, { x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy });
-    else if (d.part === "start") onChange(id, { x1: o.x1 + dx, y1: o.y1 + dy });
-    else onChange(id, { x2: o.x2 + dx, y2: o.y2 + dy });
+    const disable = { disable: e.ctrlKey };
+    if (d.part === "body") {
+      const x = Math.min(o.x1, o.x2) + dx;
+      const y = Math.min(o.y1, o.y2) + dy;
+      const s = snap(
+        id,
+        { x, y, w: Math.abs(o.x2 - o.x1), h: Math.abs(o.y2 - o.y1) },
+        disable,
+      );
+      const ax = s.x - x;
+      const ay = s.y - y;
+      onChange(id, {
+        x1: o.x1 + dx + ax,
+        y1: o.y1 + dy + ay,
+        x2: o.x2 + dx + ax,
+        y2: o.y2 + dy + ay,
+      });
+    } else if (d.part === "start") {
+      const s = snap(id, { x: o.x1 + dx, y: o.y1 + dy, w: 0, h: 0 }, disable);
+      onChange(id, { x1: s.x, y1: s.y });
+    } else {
+      const s = snap(id, { x: o.x2 + dx, y: o.y2 + dy, w: 0, h: 0 }, disable);
+      onChange(id, { x2: s.x, y2: s.y });
+    }
   };
 
   const end = () => {
     drag.current = null;
+    onSnapEnd();
   };
 
   const color = selected ? "#3b82f6" : "#18181b";
