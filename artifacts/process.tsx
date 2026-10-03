@@ -112,10 +112,10 @@ export default function ProcessButton() {
             window.setTimeout(() => swapTo("idle"), 1400);
           }, 1100);
         }}
-        className="t-process-btn relative inline-flex max-w-full items-center overflow-hidden rounded-full text-[16px] font-medium text-white disabled:opacity-100"
+        className="t-process-btn relative inline-flex max-w-full items-center overflow-hidden rounded-md text-[16px] font-medium text-white disabled:opacity-100 h-16"
         style={{
           background: "#FF7FD4",
-          height: 48,
+          height: 36,
           fontWeight: 500,
           width: width || undefined,
         }}
